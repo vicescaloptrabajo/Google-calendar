@@ -1,0 +1,6 @@
+{
+  "name": "ReleaseHub Calendar",
+  "description": "Calendario colaborativo para Release Managers y equipos de ingeniería: gestión de cambios, fases de despliegue, ventanas de mantenimiento y sincronización con Google Calendar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
