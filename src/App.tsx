@@ -27,6 +27,7 @@ import { ReleaseModal } from './components/ReleaseModal';
 import { ReleaseDetailsDrawer } from './components/ReleaseDetailsDrawer';
 import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
+import { ShareModal } from './components/ShareModal';
 import { CheckCircle2, AlertTriangle, Info, Bell, RefreshCw } from 'lucide-react';
 
 export default function App() {
@@ -76,6 +77,7 @@ export default function App() {
   const [deleteEvent, setDeleteEvent] = useState<ReleaseEvent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [creationPresetDate, setCreationPresetDate] = useState<Date | undefined>(undefined);
 
   // Toast Banner
@@ -303,6 +305,7 @@ export default function App() {
         unreadNotificationsCount={notificationLogs.length}
         onOpenNotifications={() => setIsNotificationModalOpen(true)}
         onLoginSuccess={handleLoginSuccess}
+        onOpenShareModal={() => setIsShareModalOpen(true)}
       />
 
       {/* Content Area */}
@@ -391,6 +394,13 @@ export default function App() {
         logs={notificationLogs}
         events={events}
         onTriggerNotification={handleTriggerPhaseNotification}
+      />
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        events={events}
       />
     </div>
   );
