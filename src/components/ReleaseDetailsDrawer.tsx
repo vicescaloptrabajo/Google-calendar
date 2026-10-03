@@ -54,60 +54,60 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
   const checklistPercent = totalChecklist > 0 ? Math.round((completedChecklist / totalChecklist) * 100) : 100;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/70 backdrop-blur-xs flex justify-end">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end">
       <div 
-        className="w-full max-w-xl bg-slate-900 border-l border-slate-800 shadow-2xl h-full flex flex-col overflow-hidden animate-in slide-in-from-right duration-300"
+        className="w-full max-w-xl bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl h-full flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 transition-colors"
       >
         {/* Drawer Header */}
         <div 
-          className="p-5 border-b border-slate-800 bg-slate-850 flex items-start justify-between relative"
+          className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-start justify-between relative"
           style={{ borderTop: `4px solid ${event.color || phaseMeta.color}` }}
         >
           <div className="space-y-1 pr-6">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono font-bold text-xs bg-slate-800 text-white px-2.5 py-0.5 rounded border border-slate-700">
+              <span className="font-mono font-bold text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-2.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 shadow-2xs">
                 {event.releaseTag}
               </span>
-              <span className="font-mono text-xs text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded">
+              <span className="font-mono text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
                 {event.changeTicketId}
               </span>
               <span
                 className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
                   event.environment === 'production'
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                    ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
                 }`}
               >
                 {event.environment}
               </span>
             </div>
 
-            <h3 className="text-lg font-bold text-white mt-1">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white mt-1">
               {event.title}
             </h3>
-            <p className="text-xs text-emerald-400 font-medium">
-              Servicio: <span className="text-slate-200">{event.service}</span>
+            <p className="text-xs text-blue-700 dark:text-emerald-400 font-semibold">
+              Servicio: <span className="text-slate-800 dark:text-slate-200">{event.service}</span>
             </p>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => onEdit(event)}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-emerald-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               title="Editar liberación"
             >
               <Edit3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => onDelete(event)}
-              className="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               title="Eliminar liberación"
             >
               <Trash2 className="w-4 h-4" />
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-1"
+              className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -117,50 +117,50 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
         {/* Drawer Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Phase & Window banner */}
-          <div className="bg-slate-850 p-4 rounded-xl border border-slate-800 space-y-3">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span
-                  className="w-3 h-3 rounded-full"
+                  className="w-3 h-3 rounded-full shadow-xs"
                   style={{ backgroundColor: event.color || phaseMeta.color }}
                 ></span>
-                <span className="text-sm font-bold text-white">
+                <span className="text-sm font-bold text-slate-900 dark:text-white">
                   {phaseMeta.label}
                 </span>
               </div>
 
               {/* Status pill */}
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                isOngoing ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse' :
-                isPast ? 'bg-slate-800 text-slate-400' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                isOngoing ? 'bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 animate-pulse' :
+                isPast ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
               }`}>
                 {isOngoing ? '● En Ejecución' : isPast ? 'Finalizado' : 'Programado'}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs pt-1 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-3 text-xs pt-2 border-t border-slate-200 dark:border-slate-800">
               <div>
-                <span className="text-slate-400 block text-[11px]">Inicio de Ventana:</span>
-                <span className="font-semibold text-slate-200">
+                <span className="text-slate-500 dark:text-slate-400 block text-[11px] font-medium">Inicio de Ventana:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">
                   {startDate.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[11px]">Fin de Ventana:</span>
-                <span className="font-semibold text-slate-200">
+                <span className="text-slate-500 dark:text-slate-400 block text-[11px] font-medium">Fin de Ventana:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">
                   {endDate.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                 </span>
               </div>
             </div>
 
             {/* Quick action: trigger notification */}
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                 Notificaciones automáticas para miembros:
               </span>
               <button
                 onClick={() => onTriggerNotification(event, event.phase)}
-                className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
+                className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Send className="w-3 h-3" />
                 <span>Notificar Fase Actual</span>
@@ -170,51 +170,51 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
 
           {/* Key Change Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-            <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Riesgo</span>
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold block">Riesgo</span>
               <span className={`text-xs font-bold uppercase mt-0.5 inline-block ${
-                event.risk === 'critical' ? 'text-rose-400' :
-                event.risk === 'high' ? 'text-amber-400' :
-                event.risk === 'medium' ? 'text-yellow-400' : 'text-emerald-400'
+                event.risk === 'critical' ? 'text-rose-600 dark:text-rose-400' :
+                event.risk === 'high' ? 'text-amber-600 dark:text-amber-400' :
+                event.risk === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-emerald-600 dark:text-emerald-400'
               }`}>
                 {event.risk}
               </span>
             </div>
 
-            <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Comité CAB</span>
-              <span className="text-xs font-bold text-slate-200 mt-0.5 inline-block capitalize">
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold block">Comité CAB</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 inline-block capitalize">
                 {event.cabStatus}
               </span>
             </div>
 
-            <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Indisponibilidad</span>
-              <span className="text-xs font-bold text-slate-200 mt-0.5 inline-block">
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold block">Indisponibilidad</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 inline-block">
                 {event.downtimeExpectedMinutes > 0 ? `${event.downtimeExpectedMinutes}m` : 'Zero-Downtime'}
               </span>
             </div>
 
-            <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Est. Rollback</span>
-              <span className="text-xs font-bold text-rose-400 mt-0.5 inline-block">
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold block">Est. Rollback</span>
+              <span className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-0.5 inline-block">
                 {event.rollbackEstimateMinutes} min
               </span>
             </div>
           </div>
 
           {/* Rollback Procedure Card */}
-          <div className="bg-slate-850 p-4 rounded-xl border border-rose-500/30 space-y-2">
+          <div className="bg-rose-50/60 dark:bg-rose-950/30 p-4 rounded-xl border border-rose-200 dark:border-rose-900/60 space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-300">
-                <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800 dark:text-rose-300">
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                 Plan de Contingencia / Reversión (Rollback)
               </div>
-              <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded font-mono">
+              <span className="text-[10px] bg-rose-100 dark:bg-rose-900/50 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded font-mono font-bold border border-rose-200 dark:border-rose-800">
                 {event.rollbackEstimateMinutes} min
               </span>
             </div>
-            <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed">
+            <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed font-medium">
               {event.rollbackPlan}
             </p>
           </div>
@@ -222,45 +222,45 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
           {/* Validation Checklist */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-emerald-400" />
                 Checklist de Liberación ({completedChecklist}/{totalChecklist})
               </h4>
-              <span className="text-xs font-semibold text-emerald-400">{checklistPercent}%</span>
+              <span className="text-xs font-bold text-blue-600 dark:text-emerald-400">{checklistPercent}%</span>
             </div>
 
-            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
               <div
-                className="bg-emerald-500 h-full rounded-full transition-all"
+                className="bg-orange-500 h-full rounded-full transition-all"
                 style={{ width: `${checklistPercent}%` }}
               ></div>
             </div>
 
-            <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden bg-slate-850">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
               {event.checklist.map(item => (
                 <div
                   key={item.id}
                   onClick={() => onToggleChecklist(event.id, item.id)}
-                  className="p-3 flex items-center justify-between gap-3 hover:bg-slate-800 cursor-pointer transition-colors"
+                  className="p-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer transition-colors"
                 >
-                  <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer select-none">
+                  <label className="flex items-center gap-2.5 text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={item.completed}
                       onChange={() => {}}
-                      className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+                      className="rounded border-slate-300 dark:border-slate-700 text-blue-600 dark:text-emerald-500 focus:ring-blue-500 w-4 h-4"
                     />
-                    <span className={item.completed ? 'line-through text-slate-400' : 'font-medium'}>
+                    <span className={item.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'font-medium'}>
                       {item.title}
                     </span>
                   </label>
 
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {item.phase}
                     </span>
                     {item.assignedTo && (
-                      <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded hidden sm:inline">
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded hidden sm:inline border border-slate-200 dark:border-slate-700">
                         {item.assignedTo}
                       </span>
                     )}
@@ -272,27 +272,27 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
 
           {/* Involved Team Members Table */}
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-emerald-400" />
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-blue-600 dark:text-emerald-400" />
               Miembros Involucrados por Fase ({event.involvedMembers.length})
             </h4>
 
-            <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden bg-slate-850">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
               {event.involvedMembers.map(member => (
                 <div key={member.id} className="p-3 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-emerald-400">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-emerald-400">
                       {member.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-slate-200">{member.name}</div>
-                      <div className="text-[10px] text-slate-400">{member.email}</div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">{member.name}</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">{member.email}</div>
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <div className="text-xs font-semibold text-slate-300">{member.role}</div>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full inline-block mt-0.5">
+                    <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">{member.role}</div>
+                    <span className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full inline-block mt-0.5 border border-blue-200 dark:border-blue-800">
                       {member.phase === 'all' ? 'Todas Fases' : PHASE_CONFIG[member.phase]?.label.split(' ')[0] || member.phase}
                     </span>
                   </div>
@@ -303,18 +303,18 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
 
           {/* Technical Links */}
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Enlaces de Liberación</h4>
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Enlaces de Liberación</h4>
             <div className="space-y-1.5">
               {event.runbookUrl && (
                 <a
                   href={event.runbookUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-2.5 bg-slate-850 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs text-slate-200 transition-colors"
+                  className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 transition-colors"
                 >
                   <span className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Runbook de Despliegue</span>
+                    <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-emerald-400" />
+                    <span className="font-semibold">Runbook de Despliegue</span>
                   </span>
                   <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                 </a>
@@ -324,11 +324,11 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
                   href={event.jiraTicketUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-2.5 bg-slate-850 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs text-slate-200 transition-colors"
+                  className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 transition-colors"
                 >
                   <span className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Ticket Jira ({event.changeTicketId})</span>
+                    <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span className="font-semibold">Ticket Jira ({event.changeTicketId})</span>
                   </span>
                   <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                 </a>
@@ -338,13 +338,13 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
                   href={event.htmlLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 transition-colors"
+                  className="flex items-center justify-between p-2.5 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-semibold transition-colors"
                 >
                   <span className="flex items-center gap-2">
-                    <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
+                    <CalendarIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                     <span>Abrir en Google Calendar Web</span>
                   </span>
-                  <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 </a>
               )}
             </div>
@@ -352,13 +352,13 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
         </div>
 
         {/* Drawer Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-850 flex items-center justify-between">
-          <div className="text-xs text-slate-400">
-            Owner: <strong>{event.owner.name}</strong>
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            Owner: <strong className="text-slate-800 dark:text-slate-200">{event.owner.name}</strong>
           </div>
           <button
             onClick={() => onEdit(event)}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5"
+            className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-md shadow-orange-500/25 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span>Editar Detalles</span>

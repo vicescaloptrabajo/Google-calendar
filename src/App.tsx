@@ -80,6 +80,27 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [creationPresetDate, setCreationPresetDate] = useState<Date | undefined>(undefined);
 
+  // Theme State: 'light' (clean white/blue/orange) or 'dark' (cyber dark slate)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('releasehub_theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return 'light';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem('releasehub_theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
   // Toast Banner
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -270,7 +291,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-white transition-colors duration-200">
       {/* Toast Notification Banner */}
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -306,6 +327,8 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationModalOpen(true)}
         onLoginSuccess={handleLoginSuccess}
         onOpenShareModal={() => setIsShareModalOpen(true)}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Content Area */}
