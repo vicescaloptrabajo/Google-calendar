@@ -1,6 +1,29 @@
 # Guía de Despliegue en Contenedores & Sitios Web (ReleaseHub Calendar)
 
-Este proyecto es una aplicación web estándar basada en **React + Vite + TypeScript**. Puede alojarse como sitio web estático o desplegarse en cualquier entorno de contenedores (Docker, Kubernetes, AWS, GCP, Azure o infraestructura On-Premise).
+Este proyecto es una aplicación web estándar basada en **React + Vite + TypeScript**. Puede alojarse gratuitamente en **GitHub Pages**, como sitio web estático corporativo, o desplegarse en contenedores **Docker / Kubernetes**.
+
+---
+
+## 0. 🐙 Despliegue Gratuito en GitHub Pages (Directo desde tu cuenta de GitHub)
+
+Ya se ha configurado el archivo de automatización **`.github/workflows/deploy-pages.yml`**. Para que GitHub lo publique automáticamente como sitio web:
+
+1. **Sube el código a tu repositorio de GitHub:**
+   ```bash
+   git init
+   git add .
+   git commit -m "feat: initial commit of ReleaseHub Calendar"
+   git branch -M main
+   git remote add origin https://github.com/TU-USUARIO/TU-REPOSITORIO.git
+   git push -u origin main
+   ```
+
+2. **Habilitar GitHub Pages en el repositorio:**
+   - En tu repositorio de GitHub, ve a **Settings** (Configuración) > **Pages**.
+   - En la sección **Build and deployment** > **Source**, selecciona: **GitHub Actions**.
+
+¡Listo! Cada vez que hagas `git push`, GitHub compilará y publicará automáticamente tu aplicación en una URL como:  
+👉 `https://TU-USUARIO.github.io/TU-REPOSITORIO/`
 
 ---
 
@@ -30,9 +53,17 @@ docker run -d -p 8080:80 --name releasehub releasehub-calendar:latest
 El proyecto genera un paquete web estándar HTML/CSS/JS estático.
 
 ```bash
-# Instalar dependencias y compilar
+# 1. Situarse en la carpeta raíz del proyecto (donde está package.json)
+cd ruta/del/proyecto
+
+# 2. Instalar dependencias
 npm install
+
+# 3. Compilar para producción (genera la carpeta /dist)
 npm run build
+
+# 4. Servir en producción localmente (opcional)
+npm start
 ```
 La carpeta generada `/dist` contiene todos los archivos estáticos listos para subirse a:
 - **Servidor Nginx / Apache / IIS interno** de la empresa.
