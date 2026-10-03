@@ -17,6 +17,7 @@ interface PipelineViewProps {
   onSelectEvent: (event: ReleaseEvent) => void;
   onAdvancePhase: (event: ReleaseEvent, nextPhase: ReleasePhase) => void;
   selectedEnv: Environment | 'all';
+  onSelectEnv?: (env: Environment | 'all') => void;
 }
 
 const PIPELINE_COLUMNS: { phase: ReleasePhase; label: string; nextPhase?: ReleasePhase }[] = [
@@ -32,7 +33,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   events,
   onSelectEvent,
   onAdvancePhase,
-  selectedEnv
+  selectedEnv,
+  onSelectEnv
 }) => {
   const filteredEvents = events.filter(e => {
     if (selectedEnv !== 'all' && e.environment !== selectedEnv) return false;
@@ -42,18 +44,38 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Intro banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl backdrop-blur-md">
         <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
             Pipeline de Ciclo de Vida del Cambio
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              Gestión Ágil de Releases
+              {filteredEvents.length} en curso
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Avanza una liberación a la siguiente fase para disparar las notificaciones automáticas a los miembros involucrados.
+            Avanza una liberación a la siguiente fase para disparar las notificaciones automáticas.
           </p>
         </div>
+
+        {onSelectEnv && (
+          <div className="flex items-center bg-slate-950/70 rounded-xl p-1 border border-slate-800 shadow-inner text-xs shrink-0">
+            {(['all', 'production', 'staging', 'pre-prod'] as const).map(env => (
+              <button
+                key={env}
+                onClick={() => onSelectEnv(env)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
+                  selectedEnv === env
+                    ? env === 'production'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+              >
+                {env === 'all' ? 'Todos' : env === 'production' ? 'Prod' : env}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Kanban Columns */}

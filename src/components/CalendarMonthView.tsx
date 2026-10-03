@@ -12,7 +12,9 @@ import {
   Users, 
   Radio, 
   Sparkles,
-  Info
+  Info,
+  Palette,
+  RotateCcw
 } from 'lucide-react';
 import { ReleaseEvent, ReleasePhase, Environment, RiskLevel, PHASE_CONFIG, COLOR_PALETTE } from '../types/release';
 
@@ -23,6 +25,7 @@ interface CalendarMonthViewProps {
   onSelectEvent: (event: ReleaseEvent) => void;
   onCreateAtDate: (date: Date) => void;
   selectedEnv: Environment | 'all';
+  onSelectEnv?: (env: Environment | 'all') => void;
 }
 
 export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
@@ -31,14 +34,15 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
   onSelectDate,
   onSelectEvent,
   onCreateAtDate,
-  selectedEnv
+  selectedEnv,
+  onSelectEnv
 }) => {
   const [currentYear, setCurrentYear] = useState(selectedDate.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(selectedDate.getMonth());
   const [searchQuery, setSearchQuery] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<ReleasePhase | 'all'>('all');
   const [riskFilter, setRiskFilter] = useState<RiskLevel | 'all'>('all');
-  const [showLegend, setShowLegend] = useState(true);
+  const [showLegend, setShowLegend] = useState(false);
 
   // Month navigation
   const handlePrevMonth = () => {
@@ -173,66 +177,101 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Top Filter & Search Controls */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg backdrop-blur space-y-3">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-3.5">
+        {/* Tier 1: Month Nav + Environment Switcher + Search */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Month / Year Navigator */}
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-white min-w-[200px]">
-              {monthNames[currentMonth]} <span className="text-emerald-400">{currentYear}</span>
-            </h2>
-            <div className="flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-slate-950/70 rounded-xl p-1 border border-slate-800 shadow-inner">
               <button
                 onClick={handlePrevMonth}
-                className="p-1.5 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors"
+                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
                 title="Mes anterior"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={handleToday}
-                className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
               >
                 Hoy
               </button>
               <button
                 onClick={handleNextMonth}
-                className="p-1.5 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors"
+                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
                 title="Mes siguiente"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-xl font-black text-white tracking-tight">
+                {monthNames[currentMonth]} <span className="text-emerald-400">{currentYear}</span>
+              </h2>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700/60">
+                {filteredEvents.length} {filteredEvents.length === 1 ? 'liberación' : 'liberaciones'}
+              </span>
+            </div>
           </div>
 
-          {/* Quick Search */}
-          <div className="relative w-full md:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Buscar por tag, ticket o servicio..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
+          {/* Right cluster: Environments + Search */}
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+            {/* Environment Filter Selector Chips */}
+            {onSelectEnv && (
+              <div className="flex items-center bg-slate-950/70 rounded-xl p-1 border border-slate-800 shadow-inner text-xs">
+                {(['all', 'production', 'staging', 'pre-prod'] as const).map(env => (
+                  <button
+                    key={env}
+                    onClick={() => onSelectEnv(env)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
+                      selectedEnv === env
+                        ? env === 'production'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-xs'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                  >
+                    {env === 'all' ? 'Todos' : env === 'production' ? 'Prod' : env}
+                  </button>
+                ))}
+              </div>
             )}
-          </div>
 
-          {/* Filters: Phase & Risk */}
-          <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+            {/* Quick Search */}
+            <div className="relative w-full sm:w-60">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar ticket, servicio..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tier 2: Refined Filters Strip & Utilities */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-800/60 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-slate-500 text-[11px] font-medium hidden sm:inline">Filtrar:</span>
+            
             {/* Phase filter */}
             <select
               value={phaseFilter}
               onChange={e => setPhaseFilter(e.target.value as any)}
-              className="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="bg-slate-950/70 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
             >
-              <option value="all">Todas las Fases</option>
+              <option value="all">Todas las Fases ({Object.keys(PHASE_CONFIG).length})</option>
               {Object.entries(PHASE_CONFIG).map(([key, config]) => (
                 <option key={key} value={key}>{config.label}</option>
               ))}
@@ -242,7 +281,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
             <select
               value={riskFilter}
               onChange={e => setRiskFilter(e.target.value as any)}
-              className="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="bg-slate-950/70 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
             >
               <option value="all">Todos los Riesgos</option>
               <option value="critical">🔴 Riesgo Crítico</option>
@@ -251,42 +290,80 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
               <option value="low">🟢 Riesgo Bajo</option>
             </select>
 
-            {/* Toggle Legend */}
+            {/* Toggle Color Legend button */}
             <button
               onClick={() => setShowLegend(s => !s)}
-              className={`p-1.5 rounded-xl border transition-colors ${
-                showLegend ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-medium transition-all ${
+                showLegend
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
               }`}
-              title="Mostrar u ocultar código de colores de fases"
             >
-              <Info className="w-4 h-4" />
+              <Palette className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Código de Colores</span>
+              <span className="text-[10px] text-slate-500">({showLegend ? 'Ocultar' : 'Ver'})</span>
             </button>
+
+            {/* Reset Filters button if any filter is active */}
+            {(phaseFilter !== 'all' || riskFilter !== 'all' || searchQuery || selectedEnv !== 'all') && (
+              <button
+                onClick={() => {
+                  setPhaseFilter('all');
+                  setRiskFilter('all');
+                  setSearchQuery('');
+                  if (onSelectEnv) onSelectEnv('all');
+                }}
+                className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+                title="Restablecer todos los filtros"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Restablecer</span>
+              </button>
+            )}
           </div>
+
+          {/* Right indicator: Collisions warning if any */}
+          {Object.keys(dayCollisions).length > 0 && (
+            <div className="flex items-center gap-1.5 text-amber-300 text-[11px] font-semibold bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>{Object.keys(dayCollisions).length} ventana(s) en colisión detectadas</span>
+            </div>
+          )}
         </div>
 
-        {/* Phase Color Code Legend */}
+        {/* Phase Color Code Legend Card (Collapsible) */}
         {showLegend && (
-          <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="text-slate-400 font-medium mr-1">Código de Colores:</span>
-            {Object.entries(PHASE_CONFIG).map(([key, meta]) => (
-              <button
-                key={key}
-                onClick={() => setPhaseFilter(phaseFilter === key ? 'all' : key as ReleasePhase)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all ${
-                  phaseFilter === key
-                    ? 'ring-2 ring-white font-semibold'
-                    : 'opacity-85 hover:opacity-100'
-                }`}
-                style={{
-                  backgroundColor: meta.bgLight,
-                  borderColor: meta.borderColor,
-                  color: meta.color
-                }}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }}></span>
-                <span>{meta.label}</span>
-              </button>
-            ))}
+          <div className="pt-3 border-t border-slate-800/70 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-emerald-400" />
+                  Filtro Rápido por Código de Fase:
+                </span>
+                <span className="text-[10px] text-slate-400">Haz clic en una fase para filtrar el calendario</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 text-[11px]">
+                {Object.entries(PHASE_CONFIG).map(([key, meta]) => (
+                  <button
+                    key={key}
+                    onClick={() => setPhaseFilter(phaseFilter === key ? 'all' : key as ReleasePhase)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left transition-all ${
+                      phaseFilter === key
+                        ? 'ring-2 ring-white font-bold scale-[1.02]'
+                        : 'opacity-85 hover:opacity-100 hover:scale-[1.01]'
+                    }`}
+                    style={{
+                      backgroundColor: meta.bgLight,
+                      borderColor: meta.borderColor,
+                      color: meta.color
+                    }}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: meta.color }} />
+                    <span className="truncate">{meta.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

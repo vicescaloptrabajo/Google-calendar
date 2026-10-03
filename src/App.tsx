@@ -322,6 +322,7 @@ export default function App() {
               setIsCreateModalOpen(true);
             }}
             selectedEnv={selectedEnv}
+            onSelectEnv={setSelectedEnv}
           />
         )}
 
@@ -337,6 +338,7 @@ export default function App() {
               setIsCreateModalOpen(true);
             }}
             selectedEnv={selectedEnv}
+            onSelectEnv={setSelectedEnv}
           />
         )}
 
@@ -346,6 +348,7 @@ export default function App() {
             onSelectEvent={ev => setDrawerEvent(ev)}
             onAdvancePhase={handleAdvancePhase}
             selectedEnv={selectedEnv}
+            onSelectEnv={setSelectedEnv}
           />
         )}
       </main>

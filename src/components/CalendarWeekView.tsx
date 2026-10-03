@@ -17,6 +17,7 @@ interface CalendarWeekViewProps {
   onSelectEvent: (event: ReleaseEvent) => void;
   onCreateAtDate: (date: Date) => void;
   selectedEnv: Environment | 'all';
+  onSelectEnv?: (env: Environment | 'all') => void;
 }
 
 export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
@@ -25,7 +26,8 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
   onSelectDate,
   onSelectEvent,
   onCreateAtDate,
-  selectedEnv
+  selectedEnv,
+  onSelectEnv
 }) => {
   // Compute start of week (Monday)
   const weekStart = useMemo(() => {
@@ -71,37 +73,60 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Header Navigator */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold text-white">
+          <div className="flex items-center bg-slate-950/70 rounded-xl p-1 border border-slate-800 shadow-inner">
+            <button
+              onClick={handlePrevWeek}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+              title="Semana anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onSelectDate(new Date())}
+              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Hoy
+            </button>
+            <button
+              onClick={handleNextWeek}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+              title="Semana siguiente"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <h2 className="text-base sm:text-lg font-black text-white">
             Semana del {weekDays[0].toLocaleDateString([], { day: 'numeric', month: 'short' })} al {weekDays[6].toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
           </h2>
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-            Línea Temporal de Ventanas
-          </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrevWeek}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-            title="Semana anterior"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onSelectDate(new Date())}
-            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 rounded-lg transition-colors"
-          >
-            Hoy
-          </button>
-          <button
-            onClick={handleNextWeek}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-            title="Semana siguiente"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+        <div className="flex items-center gap-2.5">
+          {onSelectEnv && (
+            <div className="flex items-center bg-slate-950/70 rounded-xl p-1 border border-slate-800 shadow-inner text-xs">
+              {(['all', 'production', 'staging', 'pre-prod'] as const).map(env => (
+                <button
+                  key={env}
+                  onClick={() => onSelectEnv(env)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
+                    selectedEnv === env
+                      ? env === 'production'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                  }`}
+                >
+                  {env === 'all' ? 'Todos' : env === 'production' ? 'Prod' : env}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hidden md:inline-block">
+            Línea Temporal
+          </span>
         </div>
       </div>
 
