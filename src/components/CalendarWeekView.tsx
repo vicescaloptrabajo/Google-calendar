@@ -9,6 +9,7 @@ import {
   Users 
 } from 'lucide-react';
 import { ReleaseEvent, Environment, PHASE_CONFIG } from '../types/release';
+import { toLocalDateKey } from '../utils/dateUtils';
 
 interface CalendarWeekViewProps {
   events: ReleaseEvent[];
@@ -137,7 +138,7 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
           <div className="grid grid-cols-[60px_repeat(7,1fr)] bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700/80 sticky top-0 z-10">
             <div className="p-3 text-center text-xs font-bold text-slate-500 dark:text-slate-400">Hora</div>
             {weekDays.map((day, idx) => {
-              const isToday = new Date().toISOString().split('T')[0] === day.toISOString().split('T')[0];
+              const isToday = toLocalDateKey(new Date()) === toLocalDateKey(day);
               return (
                 <div
                   key={idx}
@@ -165,12 +166,12 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
 
                 {/* Day cells for this hour */}
                 {weekDays.map((day, dIdx) => {
-                  const dayIso = day.toISOString().split('T')[0];
+                  const dayIso = toLocalDateKey(day);
                   
-                  // Find events occurring in or starting in this hour on this day
+                  // Find events occurring in or starting in this hour on this day (in local timezone)
                   const matchingEvents = filteredEvents.filter(ev => {
                     const evStart = new Date(ev.startTime);
-                    const evDayIso = evStart.toISOString().split('T')[0];
+                    const evDayIso = toLocalDateKey(evStart);
                     if (evDayIso !== dayIso) return false;
                     return evStart.getHours() === hour;
                   });

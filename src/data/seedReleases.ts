@@ -1,4 +1,79 @@
-import { ReleaseEvent } from '../types/release';
+import { ReleaseEvent, DirectoryMember } from '../types/release';
+
+export const INITIAL_MEMBER_DIRECTORY: DirectoryMember[] = [
+  {
+    id: 'dir-1',
+    name: 'Vicente Escareño',
+    email: 'vicescalop.trabajo@gmail.com',
+    role: 'Release Manager',
+    defaultPhase: 'all',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-2',
+    name: 'Alejandro Morales',
+    email: 'amorales.sre@company.com',
+    role: 'DevOps / SRE',
+    defaultPhase: 'deployment-window',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-3',
+    name: 'Elena Torres',
+    email: 'etorres.qa@company.com',
+    role: 'QA Lead',
+    defaultPhase: 'smoke-testing',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-4',
+    name: 'Carlos Mendoza',
+    email: 'cmendoza.sec@company.com',
+    role: 'Security Lead',
+    defaultPhase: 'cab-review',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-5',
+    name: 'Lucía Vega',
+    email: 'lvega.dba@company.com',
+    role: 'DBA',
+    defaultPhase: 'planning',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-6',
+    name: 'Sofía Castro',
+    email: 'scastro.tech@company.com',
+    role: 'Tech Lead',
+    defaultPhase: 'code-freeze',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-7',
+    name: 'Marcos Herrera',
+    email: 'mherrera.po@company.com',
+    role: 'Product Owner',
+    defaultPhase: 'cab-review',
+    updatedAt: new Date(2026, 8, 28, 9, 0).toISOString()
+  },
+  {
+    id: 'dir-8',
+    name: 'Carlos Ramírez',
+    email: 'carlos.ramirez@company.com',
+    role: 'Soporte',
+    defaultPhase: 'deployment-window',
+    updatedAt: new Date(2026, 8, 29, 10, 0).toISOString()
+  },
+  {
+    id: 'dir-9',
+    name: 'Roberto Díaz',
+    email: 'roberto.diaz@company.com',
+    role: 'Infraestructura',
+    defaultPhase: 'maintenance-window',
+    updatedAt: new Date(2026, 8, 29, 10, 0).toISOString()
+  }
+];
 
 export const INITIAL_RELEASES: ReleaseEvent[] = [
   {
@@ -11,9 +86,9 @@ export const INITIAL_RELEASES: ReleaseEvent[] = [
     phase: 'deployment-window',
     risk: 'high',
     cabStatus: 'approved',
-    // September 30, 2026 21:00 - 23:00
-    startTime: '2026-09-30T21:00:00.000Z',
-    endTime: '2026-09-30T23:30:00.000Z',
+    // September 30, 2026 21:00 - 23:30 Local Time
+    startTime: new Date(2026, 8, 30, 21, 0).toISOString(),
+    endTime: new Date(2026, 8, 30, 23, 30).toISOString(),
     color: '#10b981', // emerald
     downtimeExpectedMinutes: 0,
     rollbackPlan: 'Canary deployment con rollback automático si tasa de error 5xx supera el 0.5% en 3 minutos. Restauración de imagen Docker v3.1.9 en Kubernetes.',
@@ -57,9 +132,9 @@ export const INITIAL_RELEASES: ReleaseEvent[] = [
     phase: 'maintenance-window',
     risk: 'critical',
     cabStatus: 'approved',
-    // October 1, 2026 03:00 - 05:00 UTC
-    startTime: '2026-10-01T03:00:00.000Z',
-    endTime: '2026-10-01T05:00:00.000Z',
+    // October 1, 2026 03:00 - 05:00 Local Time
+    startTime: new Date(2026, 9, 1, 3, 0).toISOString(),
+    endTime: new Date(2026, 9, 1, 5, 0).toISOString(),
     color: '#f97316', // orange
     downtimeExpectedMinutes: 15,
     rollbackPlan: 'Conmutación a réplica de lectura en espera mediante PgBouncer. Script revert_partitioning.sql listo para ejecución si timeout > 10 min.',
@@ -100,9 +175,9 @@ export const INITIAL_RELEASES: ReleaseEvent[] = [
     phase: 'code-freeze',
     risk: 'medium',
     cabStatus: 'approved',
-    // October 2, 2026 18:00 - 22:00 UTC
-    startTime: '2026-10-02T18:00:00.000Z',
-    endTime: '2026-10-02T22:00:00.000Z',
+    // October 2, 2026 18:00 - 22:00 Local Time
+    startTime: new Date(2026, 9, 2, 18, 0).toISOString(),
+    endTime: new Date(2026, 9, 2, 22, 0).toISOString(),
     color: '#8b5cf6', // purple
     downtimeExpectedMinutes: 0,
     rollbackPlan: 'Desbloqueo de ramas principales y cherry-pick selectivo solo para correcciones P1 autorizadas por Release Manager.',
@@ -142,9 +217,9 @@ export const INITIAL_RELEASES: ReleaseEvent[] = [
     phase: 'cab-review',
     risk: 'high',
     cabStatus: 'pending',
-    // October 5, 2026 15:00 - 16:30 UTC
-    startTime: '2026-10-05T15:00:00.000Z',
-    endTime: '2026-10-05T16:30:00.000Z',
+    // October 5, 2026 15:00 - 16:30 Local Time
+    startTime: new Date(2026, 9, 5, 15, 0).toISOString(),
+    endTime: new Date(2026, 9, 5, 16, 30).toISOString(),
     color: '#f59e0b', // amber
     downtimeExpectedMinutes: 0,
     rollbackPlan: 'En caso de rechazo del comité, se ajusta la arquitectura en entorno pre-prod para la siguiente revisión ordinaria.',
@@ -184,9 +259,9 @@ export const INITIAL_RELEASES: ReleaseEvent[] = [
     phase: 'hotfix-emergency',
     risk: 'critical',
     cabStatus: 'exempt',
-    // September 29, 2026 14:00 - 15:30 UTC
-    startTime: '2026-09-29T14:00:00.000Z',
-    endTime: '2026-09-29T15:30:00.000Z',
+    // September 29, 2026 14:00 - 15:30 Local Time
+    startTime: new Date(2026, 8, 29, 14, 0).toISOString(),
+    endTime: new Date(2026, 8, 29, 15, 30).toISOString(),
     color: '#ef4444', // red
     downtimeExpectedMinutes: 0,
     rollbackPlan: 'Reversión instantánea mediante switch de Blue/Green deployment en AWS Route53.',

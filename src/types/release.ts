@@ -19,14 +19,68 @@ export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 export type CABStatus = 'pending' | 'approved' | 'rejected' | 'exempt';
 
+export type MemberRole =
+  | ''
+  | 'Soporte'
+  | 'Infraestructura'
+  | 'DevOps / SRE'
+  | 'QA Lead'
+  | 'Tech Lead'
+  | 'DBA'
+  | 'Security Lead'
+  | 'Redes & Telecom'
+  | 'Arquitectura'
+  | 'Release Manager'
+  | 'Product Owner'
+  | 'Stakeholder'
+  | string;
+
+export const MEMBER_ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '' },
+  { value: 'Soporte', label: 'Soporte' },
+  { value: 'Infraestructura', label: 'Infraestructura' },
+  { value: 'DevOps / SRE', label: 'DevOps / SRE' },
+  { value: 'QA Lead', label: 'QA Lead' },
+  { value: 'Tech Lead', label: 'Tech Lead' },
+  { value: 'DBA', label: 'DBA' },
+  { value: 'Security Lead', label: 'Security Lead' },
+  { value: 'Redes & Telecom', label: 'Redes & Telecom' },
+  { value: 'Arquitectura', label: 'Arquitectura' },
+  { value: 'Release Manager', label: 'Release Manager' },
+  { value: 'Product Owner', label: 'Product Owner' },
+  { value: 'Stakeholder', label: 'Stakeholder' }
+];
+
+export interface DirectoryMember {
+  id: string;
+  name: string;
+  email: string;
+  role: MemberRole; // Can start '' (blank) and update automatically as assigned in future changes
+  defaultPhase?: ReleasePhase | 'all';
+  updatedAt: string;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: 'Release Manager' | 'DevOps / SRE' | 'Tech Lead' | 'QA Lead' | 'DBA' | 'Security Lead' | 'Product Owner' | 'Stakeholder';
+  role: MemberRole;
   phase: ReleasePhase | 'all';
   notified?: boolean;
   lastNotifiedAt?: string;
+}
+
+export interface ExternalSourceMetadata {
+  sourceSystem: 'servicenow' | 'jira' | 'manual';
+  changeType?: string; // Tipo (Normal, Estándar, Emergencia)
+  category?: string; // Categoría
+  subcategory?: string; // Subcategoría
+  folio?: string; // Folio
+  openedBy?: string; // Abierto por
+  openedAt?: string; // Abierto
+  assignmentGroup?: string; // Grupo de asignación
+  rawStatus?: string; // Estado original en SNOW/JIRA
+  lastImportedAt?: string;
 }
 
 export interface ChecklistItem {
@@ -76,6 +130,7 @@ export interface ReleaseEvent {
   notificationsConfig: NotificationsConfig;
   notes?: string;
   updatedAt?: string;
+  externalMetadata?: ExternalSourceMetadata;
 }
 
 export interface NotificationLog {

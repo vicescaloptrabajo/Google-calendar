@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ReleaseEvent, ReleasePhase, PHASE_CONFIG } from '../types/release';
+import { buildPhaseNotificationPayload, buildGmailComposeUrl } from '../services/notificationService';
 
 interface ReleaseDetailsDrawerProps {
   isOpen: boolean;
@@ -153,18 +154,37 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
               </div>
             </div>
 
-            {/* Quick action: trigger notification */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            {/* Quick action: trigger notification & send email */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                Notificaciones automáticas para miembros:
+                Notificaciones para miembros:
               </span>
-              <button
-                onClick={() => onTriggerNotification(event, event.phase)}
-                className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Send className="w-3 h-3" />
-                <span>Notificar Fase Actual</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={buildGmailComposeUrl(
+                    buildPhaseNotificationPayload(
+                      event,
+                      event.phase,
+                      event.involvedMembers.filter(m => m.phase === event.phase || m.phase === 'all')
+                    )
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => onTriggerNotification(event, event.phase)}
+                  className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-700 dark:text-emerald-400 border border-blue-200 dark:border-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Abrir Gmail con destinatarios y cuerpo del cambio precargados"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Enviar Correo (Gmail)</span>
+                </a>
+                <button
+                  onClick={() => onTriggerNotification(event, event.phase)}
+                  className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Send className="w-3 h-3" />
+                  <span>Notificar Fase Actual</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -202,6 +222,42 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
               </span>
             </div>
           </div>
+
+          {/* ServiceNow / JIRA Imported Metadata Card (when present) */}
+          {event.externalMetadata && (
+            <div className="bg-blue-50/50 dark:bg-slate-800/70 p-3.5 rounded-xl border border-blue-200/80 dark:border-slate-700 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-blue-900 dark:text-emerald-400 uppercase text-[11px]">
+                  Concentrado {event.externalMetadata.sourceSystem === 'servicenow' ? 'ServiceNow (SNOW)' : 'JIRA'}
+                </span>
+                {event.externalMetadata.rawStatus && (
+                  <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-mono text-[10px] font-bold border border-slate-200 dark:border-slate-700">
+                    Estado origen: {event.externalMetadata.rawStatus}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700 dark:text-slate-300">
+                {event.externalMetadata.changeType && (
+                  <div><span className="text-slate-500">Tipo:</span> <strong>{event.externalMetadata.changeType}</strong></div>
+                )}
+                {event.externalMetadata.folio && (
+                  <div><span className="text-slate-500">Folio:</span> <strong>{event.externalMetadata.folio}</strong></div>
+                )}
+                {event.externalMetadata.category && (
+                  <div><span className="text-slate-500">Categoría:</span> <strong>{event.externalMetadata.category}</strong></div>
+                )}
+                {event.externalMetadata.subcategory && (
+                  <div><span className="text-slate-500">Subcategoría:</span> <strong>{event.externalMetadata.subcategory}</strong></div>
+                )}
+                {event.externalMetadata.assignmentGroup && (
+                  <div><span className="text-slate-500">Grupo asignación:</span> <strong>{event.externalMetadata.assignmentGroup}</strong></div>
+                )}
+                {event.externalMetadata.openedBy && (
+                  <div><span className="text-slate-500">Abierto por:</span> <strong>{event.externalMetadata.openedBy}</strong></div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Rollback Procedure Card */}
           <div className="bg-rose-50/60 dark:bg-rose-950/30 p-4 rounded-xl border border-rose-200 dark:border-rose-900/60 space-y-2">
@@ -291,7 +347,11 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">{member.role}</div>
+                    {member.role ? (
+                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {member.role}
+                      </div>
+                    ) : null}
                     <span className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full inline-block mt-0.5 border border-blue-200 dark:border-blue-800">
                       {member.phase === 'all' ? 'Todas Fases' : PHASE_CONFIG[member.phase]?.label.split(' ')[0] || member.phase}
                     </span>

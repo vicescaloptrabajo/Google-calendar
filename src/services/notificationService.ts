@@ -126,3 +126,37 @@ export const dispatchPhaseNotification = (
 
   return { log, payload };
 };
+
+/**
+ * Builds a direct Gmail Web Compose URL so the user can send the real email immediately from their browser
+ */
+export const buildGmailComposeUrl = (payload: NotificationPayload, customRecipient?: string): string => {
+  const toList = customRecipient
+    ? customRecipient.trim()
+    : payload.recipients.length > 0
+    ? payload.recipients.join(',')
+    : 'vicescalop.trabajo@gmail.com';
+  const params = new URLSearchParams({
+    view: 'cm',
+    fs: '1',
+    to: toList,
+    su: payload.subject,
+    body: payload.plainText
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+};
+
+/**
+ * Builds a standard mailto: link for corporate email clients (Outlook, Mail, Thunderbird)
+ */
+export const buildMailtoUrl = (payload: NotificationPayload, customRecipient?: string): string => {
+  const toList = customRecipient
+    ? customRecipient.trim()
+    : payload.recipients.length > 0
+    ? payload.recipients.join(',')
+    : 'vicescalop.trabajo@gmail.com';
+  const subject = encodeURIComponent(payload.subject);
+  const body = encodeURIComponent(payload.plainText);
+  return `mailto:${toList}?subject=${subject}&body=${body}`;
+};
+

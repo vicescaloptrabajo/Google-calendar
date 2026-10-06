@@ -7,8 +7,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { 
   initAuth, 
-  getAccessToken, 
-  setCachedAccessToken 
+  setCachedAccessToken,
+  GoogleAuthErrorDetails
 } from './services/auth';
 import { 
   fetchGoogleCalendarEvents, 
@@ -17,27 +17,74 @@ import {
   deleteGoogleCalendarEvent 
 } from './services/calendarService';
 import { dispatchPhaseNotification } from './services/notificationService';
-import { INITIAL_RELEASES } from './data/seedReleases';
-import { ReleaseEvent, ReleasePhase, Environment, NotificationLog } from './types/release';
+import { ImportPreviewItem } from './services/importService';
+import { INITIAL_RELEASES, INITIAL_MEMBER_DIRECTORY } from './data/seedReleases';
+import { ReleaseEvent, ReleasePhase, Environment, NotificationLog, DirectoryMember } from './types/release';
 import { Navbar } from './components/Navbar';
 import { CalendarMonthView } from './components/CalendarMonthView';
 import { CalendarWeekView } from './components/CalendarWeekView';
 import { PipelineView } from './components/PipelineView';
+import { MembersView } from './components/MembersView';
 import { ReleaseModal } from './components/ReleaseModal';
 import { ReleaseDetailsDrawer } from './components/ReleaseDetailsDrawer';
 import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { ShareModal } from './components/ShareModal';
-import { CheckCircle2, AlertTriangle, Info, Bell, RefreshCw } from 'lucide-react';
+import { ImportModal } from './components/ImportModal';
+import { GoogleDiagnosticsModal } from './components/GoogleDiagnosticsModal';
+import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 
 export default function App() {
   // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [calendarToken, setCalendarToken] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastAuthError, setLastAuthError] = useState<GoogleAuthErrorDetails | null>(null);
+  const [isGoogleDiagnosticsOpen, setIsGoogleDiagnosticsOpen] = useState(false);
 
-  // App data state
-  const [events, setEvents] = useState<ReleaseEvent[]>(INITIAL_RELEASES);
+  // App data state (persisted in localStorage)
+  const [events, setEvents] = useState<ReleaseEvent[]>(() => {
+    try {
+      const saved = localStorage.getItem('releasehub_events_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_RELEASES;
+  });
+
+  const [memberDirectory, setMemberDirectory] = useState<DirectoryMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('releasehub_directory_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_MEMBER_DIRECTORY;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('releasehub_events_v2', JSON.stringify(events));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [events]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('releasehub_directory_v1', JSON.stringify(memberDirectory));
+    } catch {
+      // ignore
+    }
+  }, [memberDirectory]);
+
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([
     {
       id: 'init-log-1',
@@ -72,6 +119,8 @@ export default function App() {
 
   // Modals & Drawers
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ReleaseEvent | null>(null);
   const [drawerEvent, setDrawerEvent] = useState<ReleaseEvent | null>(null);
   const [deleteEvent, setDeleteEvent] = useState<ReleaseEvent | null>(null);
@@ -165,8 +214,145 @@ export default function App() {
     setUser(loggedInUser);
     setCalendarToken(token);
     setCachedAccessToken(token);
+    setLastAuthError(null);
     showToast(`Conectado como ${loggedInUser.displayName || loggedInUser.email}. Sincronizando calendario...`);
     syncWithGoogleCalendar(token);
+  };
+
+  // Handle manual OAuth token validation from Google Diagnostics Modal
+  const handleManualTokenSuccess = (email: string, name: string, token: string) => {
+    const syntheticUser = {
+      uid: `manual-${Date.now()}`,
+      email,
+      displayName: name,
+      photoURL: null
+    } as unknown as User;
+    setUser(syntheticUser);
+    setCalendarToken(token);
+    setCachedAccessToken(token);
+    setLastAuthError(null);
+    showToast(`Token OAuth validado para ${email}. Sincronizando con Google Calendar...`);
+    syncWithGoogleCalendar(token);
+  };
+
+  // Upsert a member into the global Member Directory (preserving or evolving their role across changes)
+  const handleUpsertDirectoryMember = useCallback(
+    (memberInput: Omit<DirectoryMember, 'id' | 'updatedAt'> & { id?: string }) => {
+      setMemberDirectory(prev => {
+        const normName = memberInput.name.trim().toLowerCase();
+        const existingIdx = prev.findIndex(
+          m => (memberInput.id && m.id === memberInput.id) || (!memberInput.id && m.name.trim().toLowerCase() === normName)
+        );
+        if (existingIdx >= 0) {
+          const existing = prev[existingIdx];
+          const updatedRole =
+            memberInput.id !== undefined
+              ? memberInput.role
+              : memberInput.role && memberInput.role.trim() !== ''
+              ? memberInput.role
+              : existing.role;
+
+          const updatedEmail =
+            memberInput.id !== undefined
+              ? memberInput.email
+              : memberInput.email.trim() || existing.email;
+
+          const updated: DirectoryMember = {
+            ...existing,
+            name: memberInput.name,
+            email: updatedEmail,
+            role: updatedRole,
+            defaultPhase: memberInput.defaultPhase || existing.defaultPhase,
+            updatedAt: new Date().toISOString()
+          };
+          const copy = [...prev];
+          copy[existingIdx] = updated;
+          return copy;
+        }
+
+        const created: DirectoryMember = {
+          id: `dir-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          name: memberInput.name.trim(),
+          email: memberInput.email.trim(),
+          role: memberInput.role || '',
+          defaultPhase: memberInput.defaultPhase || 'deployment-window',
+          updatedAt: new Date().toISOString()
+        };
+        return [created, ...prev];
+      });
+
+      // If edited directly from Members Modal, also sync role/email into existing events' involvedMembers
+      if (memberInput.id !== undefined) {
+        const norm = memberInput.name.trim().toLowerCase();
+        setEvents(prevEvents =>
+          prevEvents.map(ev => {
+            const hasMatch = ev.involvedMembers.some(im => im.name.trim().toLowerCase() === norm);
+            if (!hasMatch) return ev;
+            return {
+              ...ev,
+              involvedMembers: ev.involvedMembers.map(im =>
+                im.name.trim().toLowerCase() === norm
+                  ? { ...im, email: memberInput.email || im.email, role: memberInput.role }
+                  : im
+              )
+            };
+          })
+        );
+      }
+    },
+    []
+  );
+
+  const handleDeleteDirectoryMember = useCallback((id: string) => {
+    setMemberDirectory(prev => prev.filter(m => m.id !== id));
+    showToast('Miembro eliminado del directorio.', 'info');
+  }, []);
+
+  // Apply ServiceNow / JIRA Excel Import (Upsert: Create new + Update existing statuses)
+  const handleApplyImport = (items: ImportPreviewItem[], source: 'servicenow' | 'jira') => {
+    if (items.length === 0) return;
+
+    const createdCount = items.filter(i => i.action === 'create').length;
+    const updatedCount = items.filter(i => i.action === 'update').length;
+
+    setEvents(prev => {
+      const next = [...prev];
+      items.forEach(item => {
+        const idx = next.findIndex(
+          e =>
+            e.id === item.event.id ||
+            e.changeTicketId.trim().toLowerCase() === item.event.changeTicketId.trim().toLowerCase()
+        );
+        if (idx >= 0) {
+          next[idx] = item.event;
+        } else {
+          next.unshift(item.event);
+        }
+      });
+      return next;
+    });
+
+    // Sync discovered members from ServiceNow / JIRA into Member Directory
+    items.forEach(item => {
+      item.discoveredMembers.forEach(dm => {
+        handleUpsertDirectoryMember({
+          name: dm.name,
+          email: dm.email,
+          role: dm.role,
+          defaultPhase: item.event.phase
+        });
+      });
+    });
+
+    // Navigate calendar to the first imported event's date so the user immediately sees the changes
+    const firstDate = new Date(items[0].event.startTime);
+    if (!isNaN(firstDate.getTime())) {
+      setSelectedDate(firstDate);
+    }
+
+    showToast(
+      `Importación ${source === 'servicenow' ? 'ServiceNow' : 'JIRA'} aplicada: ${createdCount} nuevos y ${updatedCount} actualizados en el calendario.`
+    );
   };
 
   // Save Event (Create or Update)
@@ -187,7 +373,7 @@ export default function App() {
         showToast(`Guardado localmente. Error en Google Calendar: ${err.message}`, 'info');
       }
     } else {
-      showToast(editingEvent ? 'Liberación actualizada localmente.' : 'Liberación guardada localmente.');
+      showToast(editingEvent ? 'Liberación actualizada en la fecha seleccionada.' : 'Liberación guardada en la fecha seleccionada.');
     }
 
     setEvents(prev => {
@@ -199,6 +385,22 @@ export default function App() {
       }
       return [savedEvent, ...prev];
     });
+
+    // Sync involved members into Member Directory so their roles evolve automatically across changes
+    savedEvent.involvedMembers.forEach(m => {
+      handleUpsertDirectoryMember({
+        name: m.name,
+        email: m.email,
+        role: m.role,
+        defaultPhase: m.phase
+      });
+    });
+
+    // Navigate the calendar to the saved event's start date in local time so the user sees it immediately
+    const targetDate = new Date(savedEvent.startTime);
+    if (!isNaN(targetDate.getTime())) {
+      setSelectedDate(targetDate);
+    }
 
     // Update active drawer if it was being inspected
     if (drawerEvent?.id === savedEvent.id) {
@@ -274,7 +476,7 @@ export default function App() {
   const handleTriggerPhaseNotification = (event: ReleaseEvent, phase: ReleasePhase) => {
     const { log } = dispatchPhaseNotification(event, phase, 'Automated Phase Alert');
     setNotificationLogs(prev => [log, ...prev]);
-    showToast(`Alerta de fase "${phase}" enviada a ${log.recipients.length} miembros asignados.`);
+    showToast(`Alerta de fase "${phase}" registrada para ${log.recipients.length} miembros asignados.`);
   };
 
   // Toggle Checklist Item
@@ -322,10 +524,17 @@ export default function App() {
           setCreationPresetDate(undefined);
           setIsCreateModalOpen(true);
         }}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
+        onOpenMembersModal={() => setIsMembersModalOpen(true)}
         onSyncCalendar={() => syncWithGoogleCalendar()}
         unreadNotificationsCount={notificationLogs.length}
         onOpenNotifications={() => setIsNotificationModalOpen(true)}
         onLoginSuccess={handleLoginSuccess}
+        onAuthError={details => {
+          setLastAuthError(details);
+          setIsGoogleDiagnosticsOpen(true);
+        }}
+        onOpenGoogleDiagnostics={() => setIsGoogleDiagnosticsOpen(true)}
         onOpenShareModal={() => setIsShareModalOpen(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
@@ -376,6 +585,16 @@ export default function App() {
         )}
       </main>
 
+      {/* Members List & Directory Modal (Opened via User Icon in Navbar) */}
+      <MembersView
+        isOpen={isMembersModalOpen}
+        onClose={() => setIsMembersModalOpen(false)}
+        directory={memberDirectory}
+        events={events}
+        onUpsertDirectoryMember={handleUpsertDirectoryMember}
+        onDeleteDirectoryMember={handleDeleteDirectoryMember}
+      />
+
       {/* Release Create / Edit Modal */}
       <ReleaseModal
         isOpen={isCreateModalOpen}
@@ -387,6 +606,28 @@ export default function App() {
         initialEvent={editingEvent}
         initialDate={creationPresetDate}
         hasCalendarToken={!!calendarToken}
+        memberDirectory={memberDirectory}
+        onUpsertDirectoryMember={handleUpsertDirectoryMember}
+      />
+
+      {/* Import ServiceNow / JIRA Excel Modal */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        existingEvents={events}
+        memberDirectory={memberDirectory}
+        onApplyImport={handleApplyImport}
+      />
+
+      {/* Google Connection & IT Diagnostics Modal */}
+      <GoogleDiagnosticsModal
+        isOpen={isGoogleDiagnosticsOpen}
+        onClose={() => setIsGoogleDiagnosticsOpen(false)}
+        lastAuthError={lastAuthError}
+        hasCalendarToken={!!calendarToken}
+        userEmail={user?.email}
+        onLoginSuccess={handleLoginSuccess}
+        onManualTokenSuccess={handleManualTokenSuccess}
       />
 
       {/* Release Details Slide-Over Drawer */}
@@ -420,6 +661,11 @@ export default function App() {
         logs={notificationLogs}
         events={events}
         onTriggerNotification={handleTriggerPhaseNotification}
+        hasCalendarToken={!!calendarToken}
+        onOpenGoogleDiagnostics={() => {
+          setIsNotificationModalOpen(false);
+          setIsGoogleDiagnosticsOpen(true);
+        }}
       />
 
       {/* Share Modal */}

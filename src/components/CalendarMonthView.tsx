@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -17,6 +17,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { ReleaseEvent, ReleasePhase, Environment, RiskLevel, PHASE_CONFIG, COLOR_PALETTE } from '../types/release';
+import { toLocalDateKey } from '../utils/dateUtils';
 
 interface CalendarMonthViewProps {
   events: ReleaseEvent[];
@@ -43,6 +44,12 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
   const [phaseFilter, setPhaseFilter] = useState<ReleasePhase | 'all'>('all');
   const [riskFilter, setRiskFilter] = useState<RiskLevel | 'all'>('all');
   const [showLegend, setShowLegend] = useState(false);
+
+  // Sync displayed month/year whenever selectedDate changes externally (e.g. after creating/saving an event)
+  useEffect(() => {
+    setCurrentYear(selectedDate.getFullYear());
+    setCurrentMonth(selectedDate.getMonth());
+  }, [selectedDate]);
 
   // Month navigation
   const handlePrevMonth = () => {
@@ -137,20 +144,20 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
     return [...prevDays, ...currentDays, ...nextDays];
   }, [currentYear, currentMonth]);
 
-  // Get events for a specific day
+  // Get events for a specific day in LOCAL timezone
   const getEventsForDay = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalDateKey(date);
     return filteredEvents.filter(e => {
-      const eDate = e.startTime.split('T')[0];
-      return eDate === dateStr;
+      const eStartDate = toLocalDateKey(e.startTime);
+      return eStartDate === dateStr;
     });
   };
 
-  // Detect release collision: multiple production or critical events on same day
+  // Detect release collision: multiple production or critical events on same day (local time)
   const dayCollisions = useMemo(() => {
     const collisions: Record<string, ReleaseEvent[]> = {};
     filteredEvents.forEach(e => {
-      const dateKey = e.startTime.split('T')[0];
+      const dateKey = toLocalDateKey(e.startTime);
       if (!collisions[dateKey]) collisions[dateKey] = [];
       collisions[dateKey].push(e);
     });
@@ -380,9 +387,9 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
         {/* Day Cells */}
         <div className="grid grid-cols-7 auto-rows-fr gap-px bg-slate-200 dark:border-slate-800 dark:bg-slate-800">
           {calendarDays.map(({ date, isCurrentMonth }, index) => {
-            const dateStr = date.toISOString().split('T')[0];
-            const isToday = new Date().toISOString().split('T')[0] === dateStr;
-            const isSelected = selectedDate.toISOString().split('T')[0] === dateStr;
+            const dateStr = toLocalDateKey(date);
+            const isToday = toLocalDateKey(new Date()) === dateStr;
+            const isSelected = toLocalDateKey(selectedDate) === dateStr;
             const dayEvents = getEventsForDay(date);
             const hasCollision = dayCollisions[dateStr];
 

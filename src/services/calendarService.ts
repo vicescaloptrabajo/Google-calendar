@@ -198,10 +198,12 @@ export const buildGoogleEventPayload = (event: ReleaseEvent): GoogleCalendarEven
     overrides.push({ method: 'email', minutes: 120 });
   }
 
-  const attendees: GoogleCalendarAttendee[] = (event.involvedMembers || []).map(m => ({
-    email: m.email,
-    displayName: `${m.name} (${m.role} - ${m.phase})`
-  }));
+  const attendees: GoogleCalendarAttendee[] = (event.involvedMembers || [])
+    .filter(m => m.email && m.email.includes('@'))
+    .map(m => ({
+      email: m.email.trim(),
+      displayName: `${m.name}${m.role ? ` (${m.role})` : ''}`
+    }));
 
   return {
     summary: `[${event.releaseTag} | ${event.environment.toUpperCase()}] ${event.title}`,
