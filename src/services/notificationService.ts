@@ -17,34 +17,44 @@ export const buildPhaseNotificationPayload = (
   membersToAlert: TeamMember[]
 ): NotificationPayload => {
   const phaseMeta = PHASE_CONFIG[phase] || { label: phase };
-  const recipientEmails = membersToAlert.map(m => m.email);
-  
-  const subject = `[RELEASE ALERT] ${release.releaseTag} (${release.environment.toUpperCase()}) - ${phaseMeta.label}`;
+  const recipientEmails = membersToAlert
+    .map(m => (m.email || '').trim())
+    .filter(e => e.includes('@'));
+
+  const subject = `[IMPLEMENTACIÓN / CAMBIO] ${release.changeTicketId} (${release.releaseTag} | ${release.environment.toUpperCase()}) - ${release.title}`;
+
+  const checklistSection =
+    release.checklist && release.checklist.length > 0
+      ? `\nCHECKLIST DE VALIDACIÓN:\n${release.checklist
+          .map(c => `[${c.completed ? 'X' : ' '}] (${c.phase.toUpperCase()}) ${c.title}`)
+          .join('\n')}\n`
+      : '';
 
   const plainText = `
-ALERTA DE GESTIÓN DE CAMBIOS (RELEASE MANAGER)
------------------------------------------------
-Release: ${release.releaseTag} - ${release.title}
-Ticket CAB: ${release.changeTicketId}
-Servicio: ${release.service}
+CONVOCATORIA / FICHA DE IMPLEMENTACIÓN DE CAMBIO
+================================================
+Título: ${release.title}
+Ticket de Cambio (CHG): ${release.changeTicketId}
+Release Tag: ${release.releaseTag}
+Servicio / Sistema: ${release.service}
 Entorno: ${release.environment.toUpperCase()}
 Fase Actual: ${phaseMeta.label}
 Nivel de Riesgo: ${release.risk.toUpperCase()}
+Estado CAB: ${release.cabStatus.toUpperCase()}
+Indisponibilidad Estimada: ${release.downtimeExpectedMinutes} min
 Ventana Programada: ${new Date(release.startTime).toLocaleString()} - ${new Date(release.endTime).toLocaleString()}
 
 Responsable / Owner: ${release.owner.name} (${release.owner.email})
 Tiempo Estimado de Rollback: ${release.rollbackEstimateMinutes} minutos
 
-MIEMBROS INVOLUCRADOS EN ESTA FASE:
-${membersToAlert.map(m => `* ${m.name} (${m.role}) - ${m.email}`).join('\n')}
-
-ACCIONES REQUERIDAS:
-1. Verificar checklist de liberación.
-2. Mantener canal de incidentes / war-room abierto.
-3. Seguir el Runbook de despliegue: ${release.runbookUrl || 'Consulte al Release Manager'}
-
-Plan de Contingencia / Reversión:
+PARTICIPANTES ASIGNADOS:
+${membersToAlert.map(m => `* ${m.name}${m.role ? ` (${m.role})` : ''}${m.email ? ` - ${m.email}` : ''}`).join('\n')}
+${checklistSection}
+PLAN DE CONTINGENCIA / ROLLBACK:
 ${release.rollbackPlan}
+${release.notes ? `\nNOTAS ADICIONALES:\n${release.notes}` : ''}
+${release.runbookUrl ? `\nRunbook: ${release.runbookUrl}` : ''}
+${release.jiraTicketUrl ? `\nTicket Tracker: ${release.jiraTicketUrl}` : ''}
   `.trim();
 
   const slackMarkdown = `
@@ -154,9 +164,106 @@ export const buildMailtoUrl = (payload: NotificationPayload, customRecipient?: s
     ? customRecipient.trim()
     : payload.recipients.length > 0
     ? payload.recipients.join(',')
-    : 'vicescalop.trabajo@gmail.com';
+    : '';
   const subject = encodeURIComponent(payload.subject);
   const body = encodeURIComponent(payload.plainText);
   return `mailto:${toList}?subject=${subject}&body=${body}`;
 };
+
+/**
+ * Generates and downloads an .ics calendar invitation file with all participants as ATTENDEEs
+ * Ideal for Outlook / Exchange / corporate mail when offline or without Google Calendar OAuth
+ */
+export const downloadReleaseIcsInvite = (release: ReleaseEvent): void => {
+  const formatIcsDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  };
+
+  const payload = buildPhaseNotificationPayload(release, release.phase, release.involvedMembers);
+  const escapedDesc = payload.plainText.replace(/\r?\n/g, '\\n').replace(/,/g, '\\,');
+  const escapedSummary = payload.subject.replace(/,/g, '\\,');
+
+  const attendeeLines = release.involvedMembers
+    .filter(m => m.email && m.email.includes('@'))
+    .map(
+      m =>
+        `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN="${m.name}${
+          m.role ? ` (${m.role})` : ''
+        }":mailto:${m.email.trim()}`
+    );
+
+  const icsLines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ReleaseHub//Change Management Calendar//ES',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${release.changeTicketId || release.id}@releasehub.local`,
+    `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
+    `DTSTART:${formatIcsDate(release.startTime)}`,
+    `DTEND:${formatIcsDate(release.endTime)}`,
+    `SUMMARY:${escapedSummary}`,
+    `DESCRIPTION:${escapedDesc}`,
+    `LOCATION:${release.environment.toUpperCase()} - ${release.service}`,
+    release.owner.email ? `ORGANIZER;CN="${release.owner.name}":mailto:${release.owner.email}` : '',
+    ...attendeeLines,
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT30M',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Recordatorio de Ventana de Liberación',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].filter(Boolean);
+
+  const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Implementacion_${(release.changeTicketId || release.releaseTag || 'Cambio').replace(/[^a-zA-Z0-9_-]/g, '_')}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+/**
+ * Builds an official Google Calendar Event Template URL (works with any @gmail.com / Workspace calendar)
+ * Pre-fills title, UTC dates, description, location and guest emails (`add=...`) so Google sends the invitation.
+ */
+export const buildGoogleCalendarTemplateUrl = (
+  release: ReleaseEvent,
+  extraGuestEmails: string[] = []
+): string => {
+  const formatGCalDate = (iso: string) =>
+    new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+  const payload = buildPhaseNotificationPayload(release, release.phase, release.involvedMembers);
+  const guestSet = new Set<string>();
+  payload.recipients.forEach(email => {
+    if (email && email.includes('@')) guestSet.add(email.trim());
+  });
+  extraGuestEmails.forEach(email => {
+    if (email && email.includes('@')) guestSet.add(email.trim());
+  });
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `[${release.changeTicketId || release.releaseTag} | ${release.environment.toUpperCase()}] ${release.title}`,
+    dates: `${formatGCalDate(release.startTime)}/${formatGCalDate(release.endTime)}`,
+    details: payload.plainText,
+    location: `${release.environment.toUpperCase()} - ${release.service}`
+  });
+
+  guestSet.forEach(guest => {
+    params.append('add', guest);
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+};
+
+
 

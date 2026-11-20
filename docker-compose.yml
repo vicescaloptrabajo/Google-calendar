@@ -1,14 +1,21 @@
 services:
   releasehub:
+    image: releasehub-calendar:latest
     build:
       context: .
       dockerfile: Dockerfile
     container_name: releasehub-calendar
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8081:80"
+    volumes:
+      - ./data:/app/data
     environment:
       - NODE_ENV=production
+      # Opcional: Puedes configurar tu cuenta API de ServiceNow aquí o directo en la pantalla "+ Nueva Liberación"
+      # - SNOW_INSTANCE_URL=https://tuempresa.service-now.com
+      # - SNOW_USERNAME=svc_releasehub_api
+      # - SNOW_PASSWORD=tu_password_api
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
       interval: 30s

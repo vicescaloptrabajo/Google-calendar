@@ -292,7 +292,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 </div>
                 
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  El proyecto ya incluye un <strong>Dockerfile</strong> multi-stage con Nginx optimizado y <strong>docker-compose.yml</strong> listo para desplegar en tus servidores internos (On-Premise, AWS ECS, GCP Cloud Run, Azure o Kubernetes) sin depender de AI Studio.
+                  El proyecto incluye <strong>Dockerfile</strong> (Node 22 Alpine + API de persistencia en disco y proxy ServiceNow) y <strong>docker-compose.yml</strong> preconfigurado en el puerto <strong>8081</strong> con volumen <code>./data:/app/data</code> para guardar tus cambios en el servidor.
                 </p>
 
                 {/* Docker Compose snippet */}
@@ -318,7 +318,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     docker compose up -d --build
                   </pre>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Levantará el servicio en el puerto <strong>8080</strong> (o el que configure tu equipo de DevOps).
+                    Levantará el servicio en el puerto <strong>8081</strong> (<code>http://localhost:8081</code>) y guardará la base de datos local en <code>./data/releasehub-db.json</code>.
                   </p>
                 </div>
 
@@ -326,11 +326,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                   <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5">
                     <Terminal className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    Opción B: Construcción estándar de imagen Docker
+                    Opción B: Construcción estándar de imagen Docker (y exportación offline)
                   </span>
                   <pre className="bg-slate-100 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] text-slate-800 dark:text-slate-300 font-mono select-all">
                     docker build -t releasehub-calendar:latest .
-                    docker run -d -p 8080:80 --name releasehub releasehub-calendar:latest
+                    docker run -d -p 8081:80 -v $(pwd)/data:/app/data --name releasehub releasehub-calendar:latest
                   </pre>
                 </div>
 
@@ -338,9 +338,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1">
                   <strong className="text-slate-900 dark:text-white block">Archivos incluidos en el repositorio:</strong>
                   <ul className="list-disc pl-4 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <li><code>Dockerfile</code>: Multi-stage build con Node 22 y Nginx Alpine.</li>
-                    <li><code>docker-compose.yml</code>: Orquestación con reinicio automático y healthchecks.</li>
-                    <li><code>DEPLOYMENT.md</code>: Guía completa para Kubernetes, AWS S3, Cloudflare y Nginx.</li>
+                    <li><code>Dockerfile</code>: Multi-stage build con Node 22 Alpine, persistencia JSON y proxy ServiceNow.</li>
+                    <li><code>docker-compose.yml</code>: Puerto <code>8081</code>, volumen <code>./data:/app/data</code> y variables opcionales <code>SNOW_INSTANCE_URL</code>, <code>SNOW_USERNAME</code>, <code>SNOW_PASSWORD</code>.</li>
+                    <li><code>DEPLOYMENT.md</code>: Guía paso a paso para contenedor local, servidor sin internet (<code>docker save / load</code>) y Kubernetes.</li>
                   </ul>
                 </div>
               </div>

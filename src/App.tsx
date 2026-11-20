@@ -69,6 +69,38 @@ export default function App() {
     return INITIAL_MEMBER_DIRECTORY;
   });
 
+  const [serverStorageAvailable, setServerStorageAvailable] = useState(false);
+
+  // Load persisted data from Docker container server (/api/storage) if running in container
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/storage')
+      .then(res => {
+        if (!res.ok) throw new Error('No server storage');
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error('Not JSON');
+        return res.json();
+      })
+      .then(data => {
+        if (!mounted) return;
+        setServerStorageAvailable(true);
+        if (data && !data.empty) {
+          if (Array.isArray(data.events) && data.events.length > 0) {
+            setEvents(data.events);
+          }
+          if (Array.isArray(data.memberDirectory) && data.memberDirectory.length > 0) {
+            setMemberDirectory(data.memberDirectory);
+          }
+        }
+      })
+      .catch(() => {
+        // Running on static host (e.g. GitHub Pages) - uses localStorage fallback automatically
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem('releasehub_events_v2', JSON.stringify(events));
@@ -84,6 +116,17 @@ export default function App() {
       // ignore
     }
   }, [memberDirectory]);
+
+  useEffect(() => {
+    if (!serverStorageAvailable) return;
+    fetch('/api/storage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events, memberDirectory, updatedAt: new Date().toISOString() })
+    }).catch(() => {
+      // ignore
+    });
+  }, [events, memberDirectory, serverStorageAvailable]);
 
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([
     {

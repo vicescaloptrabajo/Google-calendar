@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Edit3, 
@@ -14,10 +14,16 @@ import {
   Calendar as CalendarIcon, 
   ArrowRight, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
 import { ReleaseEvent, ReleasePhase, PHASE_CONFIG } from '../types/release';
-import { buildPhaseNotificationPayload, buildGmailComposeUrl } from '../services/notificationService';
+import {
+  buildPhaseNotificationPayload,
+  buildGmailComposeUrl,
+  downloadReleaseIcsInvite,
+  buildGoogleCalendarTemplateUrl
+} from '../services/notificationService';
 
 interface ReleaseDetailsDrawerProps {
   isOpen: boolean;
@@ -38,6 +44,8 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
   onToggleChecklist,
   onTriggerNotification
 }) => {
+  const [guestInviteEmail, setGuestInviteEmail] = useState('');
+
   if (!isOpen || !event) return null;
 
   const phaseMeta = PHASE_CONFIG[event.phase] || { label: event.phase, color: '#10b981' };
@@ -154,36 +162,72 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
               </div>
             </div>
 
-            {/* Quick action: trigger notification & send email */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                Notificaciones para miembros:
-              </span>
-              <div className="flex items-center gap-1.5">
+            {/* Quick action: trigger notification, Gmail Calendar invite & .ics download */}
+            <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  Invitaciones y alertas del cambio:
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => downloadReleaseIcsInvite(event)}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Descargar archivo .ics de esta liberación para compartir por correo o Teams"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Descargar .ics</span>
+                  </button>
+                  <a
+                    href={buildGmailComposeUrl(
+                      buildPhaseNotificationPayload(
+                        event,
+                        event.phase,
+                        event.involvedMembers.filter(m => m.phase === event.phase || m.phase === 'all')
+                      )
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => onTriggerNotification(event, event.phase)}
+                    className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-700 dark:text-emerald-400 border border-blue-200 dark:border-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Abrir Gmail con destinatarios y cuerpo del cambio precargados"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Enviar Correo (Gmail)</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onTriggerNotification(event, event.phase)}
+                    className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Send className="w-3 h-3" />
+                    <span>Notificar Fase</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Direct public Gmail Calendar invite */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <input
+                  type="email"
+                  value={guestInviteEmail}
+                  onChange={e => setGuestInviteEmail(e.target.value)}
+                  placeholder="Invitar correo Gmail (ej. vicescalop.trabajo@gmail.com)"
+                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1 text-[11px] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                />
                 <a
-                  href={buildGmailComposeUrl(
-                    buildPhaseNotificationPayload(
-                      event,
-                      event.phase,
-                      event.involvedMembers.filter(m => m.phase === event.phase || m.phase === 'all')
-                    )
+                  href={buildGoogleCalendarTemplateUrl(
+                    event,
+                    guestInviteEmail.trim() ? [guestInviteEmail.trim()] : []
                   )}
                   target="_blank"
                   rel="noreferrer"
-                  onClick={() => onTriggerNotification(event, event.phase)}
-                  className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-700 dark:text-emerald-400 border border-blue-200 dark:border-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                  title="Abrir Gmail con destinatarios y cuerpo del cambio precargados"
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
+                  title="Abre Google Calendar con el evento y el invitado precargados para enviarle la invitación a su Gmail"
                 >
-                  <ExternalLink className="w-3 h-3" />
-                  <span>Enviar Correo (Gmail)</span>
+                  <CalendarIcon className="w-3 h-3" />
+                  <span>Invitar en Google Calendar</span>
                 </a>
-                <button
-                  onClick={() => onTriggerNotification(event, event.phase)}
-                  className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Send className="w-3 h-3" />
-                  <span>Notificar Fase Actual</span>
-                </button>
               </div>
             </div>
           </div>

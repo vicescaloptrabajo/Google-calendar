@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Plus, 
@@ -12,8 +12,17 @@ import {
   Bell, 
   Link as LinkIcon, 
   RotateCcw,
+  Mail,
+  Download,
+  ExternalLink,
+  Search,
+  Loader2,
+  Settings,
+  Database,
+  Filter,
   Sparkles,
-  Info
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { 
   ReleaseEvent, 
@@ -25,10 +34,29 @@ import {
   DirectoryMember,
   ChecklistItem, 
   PHASE_CONFIG, 
-  COLOR_PALETTE,
-  MEMBER_ROLE_OPTIONS
+  COLOR_PALETTE
 } from '../types/release';
 import { toLocalDateTimeInput, localInputToIso } from '../utils/dateUtils';
+import {
+  buildPhaseNotificationPayload,
+  buildMailtoUrl,
+  buildGmailComposeUrl,
+  downloadReleaseIcsInvite,
+  buildGoogleCalendarTemplateUrl
+} from '../services/notificationService';
+import {
+  ServiceNowConfig,
+  ScannedSnowChange,
+  SnowFieldTrace,
+  loadSavedSnowConfig,
+  saveSnowConfigMetadata,
+  checkServerSnowStatus,
+  testSnowConnection,
+  scanSnowChangeByNumber,
+  scanSnowChangesByRange,
+  mapScannedChangeToFormData,
+  createDemoScannedChange
+} from '../services/serviceNowService';
 
 interface ReleaseModalProps {
   isOpen: boolean;
@@ -135,6 +163,178 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
   const [remind15m, setRemind15m] = useState(true);
   const [remind1h, setRemind1h] = useState(true);
   const [remind24h, setRemind24h] = useState(false);
+  const [openEmailOnSave, setOpenEmailOnSave] = useState(false);
+  const [quickTestGmail, setQuickTestGmail] = useState('');
+
+  // ServiceNow API Scanner State
+  const [isSnowPanelOpen, setIsSnowPanelOpen] = useState(!initialEvent);
+  const [showSnowSettings, setShowSnowSettings] = useState(false);
+  const [snowScanMode, setSnowScanMode] = useState<'number' | 'range'>('number');
+  const [snowConfig, setSnowConfig] = useState<ServiceNowConfig>(() => loadSavedSnowConfig());
+  const [snowServerConfigured, setSnowServerConfigured] = useState(false);
+  const [snowChangeQuery, setSnowChangeQuery] = useState('');
+  const [snowRangeStart, setSnowRangeStart] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
+  const [snowRangeEnd, setSnowRangeEnd] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().split('T')[0];
+  });
+  const [snowStateFilter, setSnowStateFilter] = useState('all');
+  const [snowGroupFilter, setSnowGroupFilter] = useState('');
+  const [snowTextFilter, setSnowTextFilter] = useState('');
+  const [isScanningSnow, setIsScanningSnow] = useState(false);
+  const [snowError, setSnowError] = useState<string | null>(null);
+  const [snowStatusMsg, setSnowStatusMsg] = useState<string | null>(null);
+  const [scannedResults, setScannedResults] = useState<ScannedSnowChange[]>([]);
+  const [fieldTraces, setFieldTraces] = useState<Record<string, SnowFieldTrace>>({});
+
+  useEffect(() => {
+    checkServerSnowStatus().then(status => {
+      setSnowServerConfigured(status.configuredOnServer);
+      if (status.instanceUrl && !snowConfig.instanceUrl) {
+        setSnowConfig(prev => ({
+          ...prev,
+          instanceUrl: status.instanceUrl || prev.instanceUrl,
+          username: status.username || prev.username
+        }));
+      }
+    });
+  }, []);
+
+  const applyScannedChangeToForm = (scanned: ScannedSnowChange) => {
+    const mapped = mapScannedChangeToFormData(scanned);
+    setTitle(mapped.title);
+    setService(mapped.service);
+    setReleaseTag(mapped.releaseTag);
+    setChangeTicketId(mapped.changeTicketId);
+    setEnvironment(mapped.environment);
+    setPhase(mapped.phase);
+    setRisk(mapped.risk);
+    setCabStatus(mapped.cabStatus);
+    setStartTime(toLocalDateTimeInput(mapped.startTimeIso));
+    setEndTime(toLocalDateTimeInput(mapped.endTimeIso));
+    setColor(mapped.color);
+    setRollbackPlan(mapped.rollbackPlan);
+    setNotes(mapped.notes);
+    setOwnerName(mapped.ownerName);
+    if (mapped.ownerEmail) setOwnerEmail(mapped.ownerEmail);
+    if (mapped.involvedMembers.length > 0) {
+      setInvolvedMembers(prev => {
+        const merged = [...prev];
+        mapped.involvedMembers.forEach(nm => {
+          const idx = merged.findIndex(m => m.name.trim().toLowerCase() === nm.name.trim().toLowerCase());
+          if (idx >= 0) {
+            merged[idx] = {
+              ...merged[idx],
+              email: nm.email || merged[idx].email,
+              role: nm.role || merged[idx].role
+            };
+          } else {
+            merged.unshift(nm);
+          }
+        });
+        return merged;
+      });
+    }
+    setChecklist(mapped.checklist);
+    setFieldTraces(mapped.fieldTraces);
+    setSnowStatusMsg(
+      `Datos cargados desde ServiceNow (${scanned.number}): ventana, checklist (${mapped.checklist.length} tareas), rollback y participantes listos para editar.`
+    );
+    setSnowError(null);
+  };
+
+  const handleTestSnowConnection = async () => {
+    saveSnowConfigMetadata(snowConfig);
+    setIsScanningSnow(true);
+    setSnowError(null);
+    setSnowStatusMsg(null);
+    try {
+      const msg = await testSnowConnection(snowConfig);
+      setSnowStatusMsg(msg);
+    } catch (err: any) {
+      setSnowError(err?.message || 'Error al probar conexión con ServiceNow.');
+    } finally {
+      setIsScanningSnow(false);
+    }
+  };
+
+  const handleScanSnowByNumber = async () => {
+    if (!snowChangeQuery.trim()) {
+      setSnowError('Escribe un # de cambio de ServiceNow (ej. CHG0034512).');
+      return;
+    }
+    saveSnowConfigMetadata(snowConfig);
+    setIsScanningSnow(true);
+    setSnowError(null);
+    setSnowStatusMsg(null);
+    setScannedResults([]);
+    try {
+      const scanned = await scanSnowChangeByNumber(snowConfig, snowChangeQuery);
+      setScannedResults([scanned]);
+      applyScannedChangeToForm(scanned);
+    } catch (err: any) {
+      setSnowError(err?.message || 'No se pudo escanear el cambio en ServiceNow.');
+    } finally {
+      setIsScanningSnow(false);
+    }
+  };
+
+  const handleScanSnowByRange = async () => {
+    saveSnowConfigMetadata(snowConfig);
+    setIsScanningSnow(true);
+    setSnowError(null);
+    setSnowStatusMsg(null);
+    setScannedResults([]);
+    try {
+      const list = await scanSnowChangesByRange(snowConfig, {
+        startDate: snowRangeStart,
+        endDate: snowRangeEnd,
+        stateFilter: snowStateFilter,
+        assignmentGroup: snowGroupFilter,
+        searchQuery: snowTextFilter
+      });
+      setScannedResults(list);
+      if (list.length === 0) {
+        setSnowStatusMsg('No se encontraron cambios en ServiceNow con ese rango y filtros.');
+      } else {
+        setSnowStatusMsg(`Se encontraron ${list.length} cambios en ServiceNow. Haz clic en "Cargar en Formulario" en cualquiera.`);
+      }
+    } catch (err: any) {
+      setSnowError(err?.message || 'Error al escanear el rango en ServiceNow.');
+    } finally {
+      setIsScanningSnow(false);
+    }
+  };
+
+  const handleSimulateSnowScan = () => {
+    setIsScanningSnow(true);
+    setSnowError(null);
+    setSnowStatusMsg(null);
+    setTimeout(() => {
+      const demo = createDemoScannedChange(snowChangeQuery || 'CHG0045821');
+      setScannedResults([demo]);
+      applyScannedChangeToForm(demo);
+      setIsScanningSnow(false);
+    }, 650);
+  };
+
+  const renderSnowBadge = (fieldKey: string) => {
+    const trace = fieldTraces[fieldKey];
+    if (!trace) return null;
+    return (
+      <span
+        className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-emerald-950/60 text-indigo-700 dark:text-emerald-300 border border-indigo-200 dark:border-emerald-800"
+        title={`Valor extraído de ServiceNow (${trace.snowColumn}): ${trace.rawValue}`}
+      >
+        <Database className="w-2.5 h-2.5" />
+        SNOW: {trace.snowColumn}
+      </span>
+    );
+  };
 
   // Checklist
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
@@ -228,6 +428,62 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
     setChecklist(prev => prev.map(c => c.id === id ? { ...c, completed: !c.completed } : c));
   };
 
+  // Helper to build the current ReleaseEvent payload from form state (used both for saving and for sending email/invite)
+  const buildDraftEventPayload = (): ReleaseEvent => {
+    const reminderMinutes: number[] = [];
+    if (remind15m) reminderMinutes.push(15);
+    if (remind1h) reminderMinutes.push(60);
+    if (remind24h) reminderMinutes.push(1440);
+
+    // Ensure members have their latest email/role from memberDirectory if available
+    const resolvedMembers: TeamMember[] = involvedMembers.map(m => {
+      const dirMatch = memberDirectory.find(
+        d => d.name.trim().toLowerCase() === m.name.trim().toLowerCase()
+      );
+      return {
+        ...m,
+        email: m.email || dirMatch?.email || '',
+        role: dirMatch?.role !== undefined ? dirMatch.role : m.role
+      };
+    });
+
+    return {
+      id: initialEvent?.id || `rel-${Date.now()}`,
+      googleEventId: initialEvent?.googleEventId,
+      htmlLink: initialEvent?.htmlLink,
+      title: title.trim() || 'Nueva Liberación Programada',
+      releaseTag: releaseTag.trim() || 'v1.0.0',
+      changeTicketId: changeTicketId.trim() || 'CHG-PENDIENTE',
+      service: service.trim() || 'Servicio Principal',
+      environment,
+      phase,
+      risk,
+      cabStatus,
+      startTime: localInputToIso(startTime),
+      endTime: localInputToIso(endTime),
+      color,
+      downtimeExpectedMinutes: Number(downtimeExpectedMinutes) || 0,
+      rollbackPlan: rollbackPlan.trim(),
+      rollbackEstimateMinutes: Number(rollbackEstimateMinutes) || 15,
+      runbookUrl: runbookUrl.trim(),
+      jiraTicketUrl: jiraTicketUrl.trim(),
+      owner: {
+        name: ownerName.trim(),
+        email: ownerEmail.trim()
+      },
+      involvedMembers: resolvedMembers,
+      checklist,
+      notificationsConfig: {
+        autoNotifyGoogleAttendees,
+        emailAlertsEnabled,
+        popupRemindersEnabled,
+        remindMinutesBefore: reminderMinutes,
+        notifyOnPhaseChange
+      },
+      notes: notes.trim()
+    };
+  };
+
   // Form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,48 +491,18 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const reminderMinutes: number[] = [];
-      if (remind15m) reminderMinutes.push(15);
-      if (remind1h) reminderMinutes.push(60);
-      if (remind24h) reminderMinutes.push(1440);
-
-      const eventPayload: ReleaseEvent = {
-        id: initialEvent?.id || `rel-${Date.now()}`,
-        googleEventId: initialEvent?.googleEventId,
-        htmlLink: initialEvent?.htmlLink,
-        title: title.trim(),
-        releaseTag: releaseTag.trim(),
-        changeTicketId: changeTicketId.trim(),
-        service: service.trim(),
-        environment,
-        phase,
-        risk,
-        cabStatus,
-        startTime: localInputToIso(startTime),
-        endTime: localInputToIso(endTime),
-        color,
-        downtimeExpectedMinutes: Number(downtimeExpectedMinutes) || 0,
-        rollbackPlan: rollbackPlan.trim(),
-        rollbackEstimateMinutes: Number(rollbackEstimateMinutes) || 15,
-        runbookUrl: runbookUrl.trim(),
-        jiraTicketUrl: jiraTicketUrl.trim(),
-        owner: {
-          name: ownerName.trim(),
-          email: ownerEmail.trim()
-        },
-        involvedMembers,
-        checklist,
-        notificationsConfig: {
-          autoNotifyGoogleAttendees,
-          emailAlertsEnabled,
-          popupRemindersEnabled,
-          remindMinutesBefore: reminderMinutes,
-          notifyOnPhaseChange
-        },
-        notes: notes.trim()
-      };
-
+      const eventPayload = buildDraftEventPayload();
       await onSave(eventPayload);
+
+      if (openEmailOnSave) {
+        const payload = buildPhaseNotificationPayload(
+          eventPayload,
+          eventPayload.phase,
+          eventPayload.involvedMembers
+        );
+        window.location.href = buildMailtoUrl(payload);
+      }
+
       onClose();
     } catch (err) {
       console.error('Error saving release event:', err);
@@ -348,34 +574,367 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
           {/* TAB 1: DETAILS & WINDOW */}
           {activeTab === 'details' && (
             <div className="space-y-4">
+              {/* ServiceNow API Scanner Card */}
+              <div className="rounded-2xl border border-indigo-200/90 dark:border-emerald-800/70 bg-gradient-to-br from-indigo-50/70 via-blue-50/40 to-white dark:from-slate-800/90 dark:via-slate-800/70 dark:to-slate-900 overflow-hidden shadow-2xs">
+                <div className="px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 bg-indigo-50/80 dark:bg-slate-800/90 border-b border-indigo-100 dark:border-slate-700/80">
+                  <button
+                    type="button"
+                    onClick={() => setIsSnowPanelOpen(prev => !prev)}
+                    className="flex items-center gap-2 text-xs font-black text-indigo-950 dark:text-emerald-300 cursor-pointer"
+                  >
+                    <Database className="w-4 h-4 text-indigo-600 dark:text-emerald-400" />
+                    <span>Escanear Cambio desde ServiceNow (API)</span>
+                    {isScanningSnow && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+                    {isSnowPanelOpen ? (
+                      <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                    )}
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSnowPanelOpen(true);
+                        setShowSnowSettings(prev => !prev);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1 transition-colors cursor-pointer ${
+                        snowServerConfigured || snowConfig.instanceUrl
+                          ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-emerald-300 border-indigo-200 dark:border-emerald-800'
+                          : 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800'
+                      }`}
+                      title="Configura aquí tu Instancia, Usuario y Contraseña/Token API de ServiceNow"
+                    >
+                      <Settings className="w-3 h-3" />
+                      <span>
+                        {snowServerConfigured
+                          ? 'Cuenta API (Servidor)'
+                          : snowConfig.instanceUrl
+                          ? 'Cuenta API Configurada'
+                          : 'Configurar Cuenta API'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSimulateSnowScan}
+                      disabled={isScanningSnow}
+                      className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1 cursor-pointer"
+                      title="Simula un escaneo de cambio de ServiceNow para ver cómo se auto-llena cada campo del formulario"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Probar Demo SNOW</span>
+                    </button>
+                  </div>
+                </div>
+
+                {isSnowPanelOpen && (
+                  <div className="p-3.5 space-y-3">
+                    {/* API Credentials Drawer */}
+                    {showSnowSettings && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-slate-700 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                            Cuenta API de ServiceNow (se usa para consultar <code>change_request</code> y <code>change_task</code>)
+                          </span>
+                          {snowServerConfigured && (
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              ✓ Variables cargadas en servidor/Docker
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <input
+                            type="url"
+                            placeholder="https://tuempresa.service-now.com"
+                            value={snowConfig.instanceUrl}
+                            onChange={e => setSnowConfig(prev => ({ ...prev, instanceUrl: e.target.value }))}
+                            className="sm:col-span-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                          />
+                          <select
+                            value={snowConfig.authMode}
+                            onChange={e => setSnowConfig(prev => ({ ...prev, authMode: e.target.value as 'basic' | 'bearer' }))}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-800 dark:text-white cursor-pointer"
+                          >
+                            <option value="basic">Usuario + Contraseña (Basic)</option>
+                            <option value="bearer">Token OAuth (Bearer)</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={handleTestSnowConnection}
+                            disabled={isScanningSnow}
+                            className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            {isScanningSnow ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            <span>Validar Cuenta</span>
+                          </button>
+                        </div>
+
+                        {snowConfig.authMode === 'basic' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Usuario API ServiceNow (ej. svc_releasehub)"
+                              value={snowConfig.username}
+                              onChange={e => setSnowConfig(prev => ({ ...prev, username: e.target.value }))}
+                              className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                            />
+                            <input
+                              type="password"
+                              placeholder="Contraseña de la cuenta API"
+                              value={snowConfig.password || ''}
+                              onChange={e => setSnowConfig(prev => ({ ...prev, password: e.target.value }))}
+                              className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                            />
+                          </div>
+                        ) : (
+                          <input
+                            type="password"
+                            placeholder="Pega aquí tu Bearer Access Token de ServiceNow"
+                            value={snowConfig.bearerToken || ''}
+                            onChange={e => setSnowConfig(prev => ({ ...prev, bearerToken: e.target.value }))}
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                          />
+                        )}
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          También puedes dejar fija esta cuenta en tu contenedor Docker editando las variables <code>SNOW_INSTANCE_URL</code>, <code>SNOW_USERNAME</code> y <code>SNOW_PASSWORD</code> en <code>docker-compose.yml</code>.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Mode Switcher: By CHG Number vs Date Range & Filters */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSnowScanMode('number')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                          snowScanMode === 'number'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        Por # de Cambio (CHG)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSnowScanMode('range')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                          snowScanMode === 'range'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <Filter className="w-3 h-3" />
+                        <span>Por Rango de Fechas y Filtros</span>
+                      </button>
+                    </div>
+
+                    {snowScanMode === 'number' ? (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          placeholder="Ingresa el # de Cambio (ej. CHG0034512)"
+                          value={snowChangeQuery}
+                          onChange={e => setSnowChangeQuery(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleScanSnowByNumber();
+                            }
+                          }}
+                          className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 dark:text-white placeholder-slate-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleScanSnowByNumber}
+                          disabled={isScanningSnow}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
+                        >
+                          {isScanningSnow ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Escaneando SNOW...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-3.5 h-3.5" />
+                              <span>Escanear y Auto-llenar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Desde</label>
+                            <input
+                              type="date"
+                              value={snowRangeStart}
+                              onChange={e => setSnowRangeStart(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Hasta</label>
+                            <input
+                              type="date"
+                              value={snowRangeEnd}
+                              onChange={e => setSnowRangeEnd(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Estado SNOW</label>
+                            <select
+                              value={snowStateFilter}
+                              onChange={e => setSnowStateFilter(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-800 dark:text-white cursor-pointer"
+                            >
+                              <option value="all">Todos los estados</option>
+                              <option value="-2">Programado (Scheduled)</option>
+                              <option value="-3">Autorizar (Authorize)</option>
+                              <option value="-4">Evaluar (Assess)</option>
+                              <option value="-1">Implementar (Implement)</option>
+                              <option value="0">Revisión (Review)</option>
+                              <option value="-5">Nuevo (New)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Grupo de Asignación</label>
+                            <input
+                              type="text"
+                              placeholder="Ej. Infraestructura"
+                              value={snowGroupFilter}
+                              onChange={e => setSnowGroupFilter(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            placeholder="Filtro adicional (servicio, CI o palabra clave)..."
+                            value={snowTextFilter}
+                            onChange={e => setSnowTextFilter(e.target.value)}
+                            className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleScanSnowByRange}
+                            disabled={isScanningSnow}
+                            className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                          >
+                            {isScanningSnow ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Buscando en SNOW...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Search className="w-3.5 h-3.5" />
+                                <span>Escanear Rango</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loading / Status / Error Feedback */}
+                    {isScanningSnow && (
+                      <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-xs font-semibold text-blue-800 dark:text-emerald-300">
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                        <span>Consultando API de ServiceNow (change_request &amp; change_task) y extrayendo fechas, tareas y responsables...</span>
+                      </div>
+                    )}
+
+                    {snowError && (
+                      <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-medium">
+                        {snowError}
+                      </div>
+                    )}
+
+                    {snowStatusMsg && !isScanningSnow && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 font-semibold flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{snowStatusMsg}</span>
+                      </div>
+                    )}
+
+                    {/* Scanned Results List (when range returns multiple or single for selection) */}
+                    {scannedResults.length > 0 && snowScanMode === 'range' && (
+                      <div className="max-h-40 overflow-y-auto divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900">
+                        {scannedResults.map(item => (
+                          <div key={item.number} className="p-2.5 flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-[11px] font-bold text-indigo-700 dark:text-emerald-400">{item.number}</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
+                                  {item.state || 'Programado'}
+                                </span>
+                                {item.startDate && (
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">{item.startDate}</span>
+                                )}
+                              </div>
+                              <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                {item.shortDescription}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => applyScannedChangeToForm(item)}
+                              className="px-2.5 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                            >
+                              Cargar en Formulario
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Título de la Liberación *</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Título de la Liberación *
+                    {renderSnowBadge('title')}
+                  </label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Despliegue de Pasarela de Pagos Stripe v2"
                     value={title}
                     onChange={e => setTitle(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:ring-emerald-500 dark:focus:border-emerald-500 transition-colors shadow-2xs"
+                    className={`w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:ring-emerald-500 dark:focus:border-emerald-500 transition-colors shadow-2xs ${isScanningSnow ? 'opacity-60 animate-pulse' : ''}`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Servicio / Sistema Afectado *</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Servicio / Sistema Afectado *
+                    {renderSnowBadge('service')}
+                  </label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Core Banking API, Auth IAM, Checkout"
                     value={service}
                     onChange={e => setService(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:ring-emerald-500 dark:focus:border-emerald-500 transition-colors shadow-2xs"
+                    className={`w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:ring-emerald-500 dark:focus:border-emerald-500 transition-colors shadow-2xs ${isScanningSnow ? 'opacity-60 animate-pulse' : ''}`}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Release Tag</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Release Tag
+                    {renderSnowBadge('releaseTag')}
+                  </label>
                   <input
                     type="text"
                     placeholder="v3.2.0"
@@ -385,7 +944,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Ticket de Cambio (CHG)</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Ticket (CHG)
+                    {renderSnowBadge('changeTicketId')}
+                  </label>
                   <input
                     type="text"
                     placeholder="CHG-2026-104"
@@ -395,7 +957,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Entorno de Destino</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Entorno
+                    {renderSnowBadge('environment')}
+                  </label>
                   <select
                     value={environment}
                     onChange={e => setEnvironment(e.target.value as any)}
@@ -408,7 +973,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Fase Inicial</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Fase Inicial
+                    {renderSnowBadge('phase')}
+                  </label>
                   <select
                     value={phase}
                     onChange={e => {
@@ -433,7 +1001,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Fecha y Hora de Inicio</label>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Fecha y Hora de Inicio
+                      {renderSnowBadge('startTime')}
+                    </label>
                     <input
                       type="datetime-local"
                       required
@@ -443,7 +1014,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Fecha y Hora de Término</label>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Fecha y Hora de Término
+                      {renderSnowBadge('endTime')}
+                    </label>
                     <input
                       type="datetime-local"
                       required
@@ -509,7 +1083,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Release Owner (Responsable)</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Release Owner (Responsable)
+                    {renderSnowBadge('owner')}
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -536,7 +1113,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Nivel de Riesgo del Cambio</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Nivel de Riesgo del Cambio
+                    {renderSnowBadge('risk')}
+                  </label>
                   <select
                     value={risk}
                     onChange={e => setRisk(e.target.value as any)}
@@ -549,7 +1129,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Estado Comité de Cambios (CAB)</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Estado Comité de Cambios (CAB)
+                    {renderSnowBadge('cabStatus')}
+                  </label>
                   <select
                     value={cabStatus}
                     onChange={e => setCabStatus(e.target.value as any)}
@@ -569,6 +1152,7 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                   <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
                     Procedimiento de Marcha Atrás (Plan de Rollback)
+                    {renderSnowBadge('rollbackPlan')}
                   </div>
                   <div className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400">
                     <span>Tiempo estimado reversión:</span>
@@ -821,6 +1405,99 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                   })}
                 </div>
               </div>
+
+              {/* Direct Button to Send Event / Implementation to Participants' Inboxes & Gmail Calendar */}
+              {(() => {
+                const draftEvent = buildDraftEventPayload();
+                const emailPayload = buildPhaseNotificationPayload(
+                  draftEvent,
+                  draftEvent.phase,
+                  draftEvent.involvedMembers
+                );
+                const extraGuests = quickTestGmail.trim() ? [quickTestGmail.trim()] : [];
+                const mailtoHref = buildMailtoUrl(emailPayload, extraGuests[0]);
+                const gmailHref = buildGmailComposeUrl(emailPayload, extraGuests[0]);
+                const googleCalInviteHref = buildGoogleCalendarTemplateUrl(draftEvent, extraGuests);
+
+                return (
+                  <div className="bg-blue-50/70 dark:bg-emerald-950/25 p-3.5 rounded-xl border border-blue-200 dark:border-emerald-800/70 space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div className="text-xs font-bold text-blue-950 dark:text-emerald-300 flex items-center gap-1.5">
+                        <Mail className="w-4 h-4 text-blue-600 dark:text-emerald-400" />
+                        <span>Enviar Implementación a Correos e Invitación Gmail ({emailPayload.recipients.length} con correo)</span>
+                      </div>
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400">
+                        Incluye ventana, ticket CHG, riesgo, rollback y checklist
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        placeholder="Correo Gmail adicional para probar invitación (ej. tucorreo@gmail.com)"
+                        value={quickTestGmail}
+                        onChange={e => setQuickTestGmail(e.target.value)}
+                        className="flex-1 bg-white dark:bg-slate-800 border border-blue-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white placeholder-slate-400"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={googleCalInviteHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        title="Abre tu Google Calendar con el evento listo y todos los invitados agregados para enviar invitación real a Gmail"
+                      >
+                        <CalendarIcon className="w-3.5 h-3.5" />
+                        <span>Invitar en Google Calendar (Gmail)</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => downloadReleaseIcsInvite(draftEvent)}
+                        className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        title="Descarga el archivo de calendario .ics con todos los participantes para compartirlo después o abrirlo en Outlook/Google Calendar"
+                      >
+                        <Download className="w-3.5 h-3.5 text-blue-600 dark:text-emerald-400" />
+                        <span>Descargar Invitación (.ics)</span>
+                      </button>
+
+                      <a
+                        href={mailtoHref}
+                        className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        title="Abre Outlook o tu cliente de correo con todos los participantes en Para: y toda la ficha de implementación lista para enviar"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Enviar Evento a Correos (Outlook)</span>
+                      </a>
+
+                      <a
+                        href={gmailHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        title="Abre Gmail Web con todos los participantes y la ficha técnica precargada"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-blue-600 dark:text-emerald-400" />
+                        <span>Enviar por Gmail Web</span>
+                      </a>
+                    </div>
+
+                    <label className="flex items-center gap-2 pt-1 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium">
+                      <input
+                        type="checkbox"
+                        checked={openEmailOnSave}
+                        onChange={e => setOpenEmailOnSave(e.target.checked)}
+                        className="rounded border-slate-300 dark:border-slate-700 text-blue-600 dark:text-emerald-500 w-4 h-4"
+                      />
+                      <span>
+                        Al dar clic en <strong>"{initialEvent ? 'Actualizar Liberación' : 'Guardar y Sincronizar'}"</strong>, abrir automáticamente el correo hacia los participantes
+                      </span>
+                    </label>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -828,7 +1505,10 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
           {activeTab === 'checklist' && (
             <div className="space-y-4">
               <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Agregar Tarea al Checklist:</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center">
+                  Agregar Tarea al Checklist:
+                  {renderSnowBadge('checklist')}
+                </span>
                 <div className="flex gap-2">
                   <input
                     type="text"

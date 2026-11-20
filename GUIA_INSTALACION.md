@@ -57,7 +57,7 @@ npm start
 
 Este método es el más recomendado para empresas, servidores Linux/Windows internos, Kubernetes o entornos aislados sin necesidad de tener Node.js instalado en la máquina anfitriona.
 
-El proyecto ya incluye un `Dockerfile` optimizado con servidor web **Nginx** y `docker-compose.yml`.
+El proyecto ya incluye un `Dockerfile` multi-stage con **Node.js 22 Alpine** (incluye servidor estático + API `/api/storage` para persistencia en disco + proxy `/api/servicenow/scan`) y `docker-compose.yml` configurado en el puerto **8081**.
 
 ### Opción A: Usando Docker Compose (Recomendado - 1 Solo Comando)
 Desde la carpeta raíz del proyecto, ejecuta:
@@ -66,8 +66,11 @@ docker compose up -d --build
 ```
 - `-d`: Ejecuta el contenedor en segundo plano (background).
 - `--build`: Compila la imagen con los últimos cambios del código.
+- Todos los cambios se guardan automáticamente en la carpeta local `./data/releasehub-db.json`.
 
-👉 Abre tu navegador en: **`http://localhost:8080`**
+👉 Abre tu navegador en: **`http://localhost:8081`**
+
+*(Opcional: Si deseas preconfigurar tu cuenta API de ServiceNow en el contenedor, edita las variables `SNOW_INSTANCE_URL`, `SNOW_USERNAME` y `SNOW_PASSWORD` dentro de `docker-compose.yml`).*
 
 #### Comandos útiles para Docker Compose:
 ```bash
@@ -90,11 +93,13 @@ Si no utilizas Docker Compose, puedes construir y correr la imagen manualmente:
 # 1. Construir la imagen Docker:
 docker build -t releasehub-calendar:latest .
 
-# 2. Correr el contenedor en el puerto 8080:
-docker run -d -p 8080:80 --name releasehub releasehub-calendar:latest
+# 2. Correr el contenedor en el puerto 8081 con persistencia en ./data:
+docker run -d -p 8081:80 -v $(pwd)/data:/app/data --name releasehub releasehub-calendar:latest
 ```
 
-👉 Abre tu navegador en: **`http://localhost:8080`**
+👉 Abre tu navegador en: **`http://localhost:8081`**
+
+*(Si vas a mover el contenedor a un servidor sin internet, revisa `DEPLOYMENT.md` sección 1.A para exportar con `docker save` e importar con `docker load`).*
 
 ---
 
@@ -146,7 +151,7 @@ En la pestaña **Actions** verás el progreso de la tarea en color verde ✅. Un
 | **Dónde corre** | Tu PC / Servidor Node.js | Servidor / Contenedor local o nube | Servidores globales de GitHub |
 | **Requiere instalar** | Node.js + npm | Docker Desktop | Solo Git y navegador |
 | **Ideal para** | Desarrollo diario | Infraestructura corporativa / DevOps | Compartir con el equipo sin servidores |
-| **Acceso** | `localhost:3000` | `localhost:8080` (o IP del servidor) | URL pública HTTPS (`.github.io`) |
+| **Acceso** | `localhost:3000` | `localhost:8081` (o IP del servidor) | URL pública HTTPS (`.github.io`) |
 | **Costo** | Gratis | Gratis | Gratis |
 
 ---
