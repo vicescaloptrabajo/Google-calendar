@@ -52,11 +52,19 @@ const MIME_TYPES = {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks = [];
+    let size = 0;
+    const MAX_BYTES = 15 * 1024 * 1024;
     req.on('data', chunk => {
-      body += chunk;
+      size += chunk.length;
+      if (size > MAX_BYTES) {
+        reject(new Error('Payload demasiado grande.'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
     });
-    req.on('end', () => resolve(body));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
 }
@@ -84,6 +92,13 @@ async function fetchSnowTable(instanceUrl, authHeader, table, queryParams) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+
+  // Healthcheck endpoint for Docker & Kubernetes
+  if (url.pathname === '/api/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, status: 'healthy' }));
+    return;
+  }
 
   // Persistent storage API for Docker container
   if (url.pathname === '/api/storage') {
@@ -233,12 +248,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Serve static files or SPA fallback
-  let filePath = path.join(DIST_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    filePath = path.join(DIST_DIR, 'index.html');
-  }
-
   try {
+    let decodedPath = '/index.html';
+    try {
+      decodedPath = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
+    } catch {
+      decodedPath = '/index.html';
+    }
+    const safePath = path.normalize(decodedPath).replace(/^(\.\.[/\\])+/, '');
+    let filePath = path.join(DIST_DIR, safePath);
+    if (!filePath.startsWith(DIST_DIR) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      filePath = path.join(DIST_DIR, 'index.html');
+    }
+
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
     const content = fs.readFileSync(filePath);

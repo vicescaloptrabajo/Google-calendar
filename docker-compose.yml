@@ -16,8 +16,9 @@ services:
       # - SNOW_INSTANCE_URL=https://tuempresa.service-now.com
       # - SNOW_USERNAME=svc_releasehub_api
       # - SNOW_PASSWORD=tu_password_api
+      # - SNOW_BEARER_TOKEN=tu_token_oauth_opcional
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -80,6 +80,11 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
 
+  // Healthcheck endpoint
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true, status: 'healthy' });
+  });
+
   // Persistent JSON storage endpoint (shared across local dev and Docker)
   app.get('/api/storage', (_req, res) => {
     try {
