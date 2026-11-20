@@ -444,10 +444,11 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
                 </div>
 
                 {/* Day Events Stack */}
-                <div className="flex-1 space-y-1 overflow-y-auto max-h-[105px] pr-0.5">
+                <div className="flex-1 space-y-1 overflow-y-auto max-h-[120px] pr-0.5">
                   {dayEvents.slice(0, 3).map(event => {
                     const phaseMeta = PHASE_CONFIG[event.phase] || { label: event.phase, color: '#2563eb' };
                     const startTimeFormatted = new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const selectedTasks = (event.checklist || []).filter(c => c.includeInCalendar === true);
 
                     return (
                       <div
@@ -481,6 +482,26 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
                         <div className="text-[11px] font-medium text-slate-800 dark:text-slate-200 line-clamp-1">
                           {event.title}
                         </div>
+
+                        {selectedTasks.length > 0 && (
+                          <div className="mt-1 pt-1 border-t border-slate-200/70 dark:border-slate-700/70 space-y-0.5">
+                            {selectedTasks.slice(0, 3).map(task => (
+                              <div
+                                key={task.id}
+                                className="text-[9px] text-blue-800 dark:text-emerald-300 font-medium truncate flex items-center gap-1"
+                                title={task.title}
+                              >
+                                <span className="w-1 h-1 rounded-full bg-orange-500 shrink-0" />
+                                <span className="truncate">{task.title}</span>
+                              </div>
+                            ))}
+                            {selectedTasks.length > 3 && (
+                              <div className="text-[8px] text-slate-500 dark:text-slate-400 font-semibold pl-2">
+                                +{selectedTasks.length - 3} tarea(s) más
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400 mt-1">
                           <span className="flex items-center gap-0.5">

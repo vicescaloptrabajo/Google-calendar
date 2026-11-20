@@ -191,6 +191,7 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                         const start = new Date(event.startTime);
                         const end = new Date(event.endTime);
                         const durationMinutes = Math.max(30, Math.round((end.getTime() - start.getTime()) / 60000));
+                        const selectedTasks = (event.checklist || []).filter(c => c.includeInCalendar === true);
 
                         return (
                           <div
@@ -216,6 +217,20 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
                             <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate mt-0.5">
                               {event.title}
                             </div>
+                            {selectedTasks.length > 0 && (
+                              <div className="mt-1 pt-1 border-t border-slate-200/70 dark:border-slate-700/70 space-y-0.5">
+                                {selectedTasks.slice(0, 3).map(task => (
+                                  <div
+                                    key={task.id}
+                                    className="text-[9px] text-blue-800 dark:text-emerald-300 font-medium truncate flex items-center gap-1"
+                                    title={task.title}
+                                  >
+                                    <span className="w-1 h-1 rounded-full bg-orange-500 shrink-0" />
+                                    <span className="truncate">{task.title}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400 mt-1">
                               <span>{event.service}</span>
                               <span className={`w-2 h-2 rounded-full ${

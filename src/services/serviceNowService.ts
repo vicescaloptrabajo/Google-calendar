@@ -52,6 +52,9 @@ export interface ScannedSnowChange {
   tasks: {
     number: string;
     shortDescription: string;
+    description?: string;
+    type?: string;
+    startDate?: string;
     state: string;
     assignedTo: string;
     assignmentGroup: string;
@@ -147,13 +150,99 @@ function readDisplay(field: any): string {
   return String(field).trim();
 }
 
+function normalizeSearchText(text: string): string {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Formats a date/time into `[dd/mm/yyyy - HH:mm]` (24h format) for CTASK labels
+ */
+export const formatTaskDateTimeTag = (dateInput?: string | Date): string => {
+  if (!dateInput) return '';
+  const d = dateInput instanceof Date ? dateInput : parseFlexibleDate(dateInput) || new Date(dateInput);
+  if (!d || isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `[${dd}/${mm}/${yyyy} - ${hh}:${min}]`;
+};
+
+/**
+ * Classifies a CTASK into Pre-Despliegue ('pre'), Ejecución ('during'), or Post-Despliegue & Sanidad ('post')
+ * based on description, short_description, and CTASK type. Unmatched tasks default to 'during' (Ejecución).
+ */
+export const classifySnowTaskPhase = (
+  shortDescription: string,
+  description = '',
+  ctaskType = ''
+): 'pre' | 'during' | 'post' => {
+  const combined = normalizeSearchText(`${ctaskType} ${shortDescription} ${description}`);
+
+  // 1. Pre-Despliegue: respaldo, snapshot, backup, copia de seguridad, pre-requisitos
+  const preKeywords = [
+    'respaldo',
+    'respaldos',
+    'backup',
+    'backups',
+    'snapshot',
+    'snapshots',
+    'instantanea',
+    'copia de seguridad',
+    'pre-despliegue',
+    'predespliegue',
+    'pre-check',
+    'precheck',
+    'prerequisito',
+    'pre-requisito'
+  ];
+  if (preKeywords.some(kw => combined.includes(kw))) {
+    return 'pre';
+  }
+
+  // 2. Post-Despliegue & Sanidad: validaciones, sanidad, smoke tests, verificación
+  const postKeywords = [
+    'validacion',
+    'validaciones',
+    'validar',
+    'sanidad',
+    'smoke',
+    'post-despliegue',
+    'postdespliegue',
+    'post-cambio',
+    'postcambio',
+    'verificacion',
+    'verificar',
+    'healthcheck',
+    'monitoreo',
+    'certificacion'
+  ];
+  if (postKeywords.some(kw => combined.includes(kw))) {
+    return 'post';
+  }
+
+  // 3. Ejecución: liberación, implementación, bajar/subir interfaces, o cualquier otro sin coincidencia
+  return 'during';
+};
+
 export const parseRawSnowRecord = (rec: any): ScannedSnowChange => {
   const rawTasks = Array.isArray(rec._tasks) ? rec._tasks : [];
+  const parentStart = readDisplay(rec.start_date || rec.work_start);
+
   const tasks = rawTasks.map((t: any) => {
     const stateText = readDisplay(t.state).toLowerCase();
     return {
       number: readDisplay(t.number),
       shortDescription: readDisplay(t.short_description) || 'Tarea de cambio ServiceNow',
+      description: readDisplay(t.description),
+      type: readDisplay(t.u_type || t.u_tipo || t.type || t.change_task_type || t.category),
+      startDate: readDisplay(
+        t.planned_start_date || t.start_date || t.work_start || t.expected_start || t.due_date || parentStart
+      ),
       state: readDisplay(t.state),
       assignedTo: readDisplay(t.assigned_to),
       assignmentGroup: readDisplay(t.assignment_group),
@@ -161,7 +250,7 @@ export const parseRawSnowRecord = (rec: any): ScannedSnowChange => {
         stateText.includes('closed') ||
         stateText.includes('cerrad') ||
         stateText.includes('complete') ||
-        stateText.includes('3')
+        stateText === '3'
     };
   });
 
@@ -174,7 +263,7 @@ export const parseRawSnowRecord = (rec: any): ScannedSnowChange => {
     subcategory: readDisplay(rec.u_subcategory || rec.subcategory),
     environmentRaw: readDisplay(rec.u_environment || rec.environment || rec.u_ambiente),
     cmdbCi: readDisplay(rec.cmdb_ci),
-    startDate: readDisplay(rec.start_date || rec.work_start),
+    startDate: parentStart,
     endDate: readDisplay(rec.end_date || rec.work_end),
     assignedToName: readDisplay(rec.assigned_to),
     assignedToEmail: rec._assigneeEmail || '',
@@ -369,33 +458,51 @@ export const mapScannedChangeToFormData = (change: ScannedSnowChange): MappedSno
 
   const checklist: ChecklistItem[] =
     change.tasks.length > 0
-      ? change.tasks.map((t, idx) => ({
-          id: `chk-snow-${idx}-${Date.now()}`,
-          title: `${t.number ? `[${t.number}] ` : ''}${t.shortDescription}`,
-          phase: idx === 0 ? 'pre' : idx === change.tasks.length - 1 ? 'post' : 'during',
-          completed: t.closed,
-          assignedTo: t.assignedTo || t.assignmentGroup || change.assignmentGroup || undefined
-        }))
+      ? change.tasks.map((t, idx) => {
+          const parsedTaskDate = t.startDate ? parseFlexibleDate(t.startDate, parsedStart.getHours()) : parsedStart;
+          const effectiveTaskDate = parsedTaskDate || parsedStart;
+          const dateTag = formatTaskDateTimeTag(effectiveTaskDate);
+          const baseTitle = `${t.number ? `[${t.number}] ` : ''}${t.shortDescription}`;
+          const formattedTitle = dateTag && !baseTitle.includes(dateTag) ? `${baseTitle} - ${dateTag}` : baseTitle;
+
+          return {
+            id: `chk-snow-${idx}-${Date.now()}`,
+            title: formattedTitle,
+            phase: classifySnowTaskPhase(t.shortDescription, t.description, t.type),
+            completed: t.closed,
+            includeInCalendar: false,
+            scheduledAt: effectiveTaskDate.toISOString(),
+            ctaskType: t.type || undefined,
+            snowState: t.state || undefined,
+            assignedTo: t.assignedTo || t.assignmentGroup || change.assignmentGroup || undefined
+          };
+        })
       : [
           {
             id: `chk-snow-def-1`,
-            title: `Validar pre-requisitos de ${change.number} (${change.type})`,
+            title: `Validar pre-requisitos y respaldo de ${change.number} - ${formatTaskDateTimeTag(parsedStart)}`,
             phase: 'pre',
             completed: false,
+            includeInCalendar: false,
+            scheduledAt: parsedStart.toISOString(),
             assignedTo: change.assignedToName || change.assignmentGroup || undefined
           },
           {
             id: `chk-snow-def-2`,
-            title: `Ejecución de implementación en ${environment.toUpperCase()}`,
+            title: `Ejecución de implementación en ${environment.toUpperCase()} - ${formatTaskDateTimeTag(parsedStart)}`,
             phase: 'during',
             completed: false,
+            includeInCalendar: false,
+            scheduledAt: parsedStart.toISOString(),
             assignedTo: change.assignmentGroup || undefined
           },
           {
             id: `chk-snow-def-3`,
-            title: `Pruebas de sanidad post-cambio`,
+            title: `Validaciones y pruebas de sanidad post-cambio - ${formatTaskDateTimeTag(parsedEnd)}`,
             phase: 'post',
             completed: false,
+            includeInCalendar: false,
+            scheduledAt: parsedEnd.toISOString(),
             assignedTo: change.openedByName || change.assignedToName || undefined
           }
         ];
@@ -467,6 +574,9 @@ export const createDemoScannedChange = (requestedNumber?: string): ScannedSnowCh
       d.getHours()
     ).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
 
+  const baseStartPlus30 = new Date(baseStart.getTime() + 30 * 60 * 1000);
+  const baseStartPlus75 = new Date(baseStart.getTime() + 75 * 60 * 1000);
+
   return {
     number: num,
     shortDescription: 'Actualización Cluster Kubernetes & Balanceador API Gateway v4.2',
@@ -493,6 +603,9 @@ export const createDemoScannedChange = (requestedNumber?: string): ScannedSnowCh
       {
         number: 'CTASK008101',
         shortDescription: 'Respaldo de configuración Nginx Ingress y secretos TLS',
+        description: 'Tomar snapshot de nodos y respaldo de manifiestos antes del cambio.',
+        type: 'Respaldo',
+        startDate: fmt(baseStart),
         state: 'Closed Complete',
         assignedTo: 'Carlos Mendoza',
         assignmentGroup: 'Infraestructura Cloud',
@@ -500,7 +613,10 @@ export const createDemoScannedChange = (requestedNumber?: string): ScannedSnowCh
       },
       {
         number: 'CTASK008102',
-        shortDescription: 'Aplicar actualización de nodos worker y balanceador',
+        shortDescription: 'Bajar interfaces del balanceador secundario y aplicar actualización',
+        description: 'Implementación de parches en nodos worker y subir interfaces al finalizar.',
+        type: 'Implementación',
+        startDate: fmt(baseStartPlus30),
         state: 'Open',
         assignedTo: 'Carlos Mendoza',
         assignmentGroup: 'Infraestructura Cloud',
@@ -508,7 +624,21 @@ export const createDemoScannedChange = (requestedNumber?: string): ScannedSnowCh
       },
       {
         number: 'CTASK008103',
-        shortDescription: 'Ejecutar smoke tests de latencia y confirmar monitoreo',
+        shortDescription: 'Coordinación en puente operativo de ventana',
+        description: 'Seguimiento general en sala de operaciones.',
+        type: 'Coordinación',
+        startDate: fmt(baseStartPlus30),
+        state: 'Open',
+        assignedTo: 'Vicente Escareño',
+        assignmentGroup: 'Soporte',
+        closed: false
+      },
+      {
+        number: 'CTASK008104',
+        shortDescription: 'Validaciones de latencia y pruebas de sanidad post-cambio',
+        description: 'Ejecutar validaciones funcionales y confirmar métricas estables.',
+        type: 'Validaciones',
+        startDate: fmt(baseStartPlus75),
         state: 'Open',
         assignedTo: 'QA Lead',
         assignmentGroup: 'Calidad QA',

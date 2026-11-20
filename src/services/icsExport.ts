@@ -30,14 +30,21 @@ export const generateIcsContent = (events: ReleaseEvent[]): string => {
   events.forEach(event => {
     const phaseLabel = PHASE_CONFIG[event.phase]?.label || event.phase;
     const summary = `[${event.releaseTag} | ${event.environment.toUpperCase()}] ${event.title}`;
-    const description = `Servicio: ${event.service}\\n` +
-      `Ticket: ${event.changeTicketId}\\n` +
-      `Fase: ${phaseLabel}\\n` +
-      `Riesgo: ${event.risk.toUpperCase()}\\n` +
-      `Rollback (${event.rollbackEstimateMinutes}m): ${event.rollbackPlan}\\n` +
-      `Responsable: ${event.owner.name} (${event.owner.email})\\n` +
-      (event.runbookUrl ? `Runbook: ${event.runbookUrl}\\n` : '') +
-      (event.jiraTicketUrl ? `Jira: ${event.jiraTicketUrl}\\n` : '');
+    const selectedTasks = (event.checklist || []).filter(c => c.includeInCalendar === true);
+    const tasksText =
+      selectedTasks.length > 0
+        ? `Tareas del Cambio:\n${selectedTasks.map(t => `• ${t.title}`).join('\n')}\n`
+        : '';
+
+    const description = `Servicio: ${event.service}\n` +
+      `Ticket: ${event.changeTicketId}\n` +
+      `Fase: ${phaseLabel}\n` +
+      `Riesgo: ${event.risk.toUpperCase()}\n` +
+      `Rollback (${event.rollbackEstimateMinutes}m): ${event.rollbackPlan}\n` +
+      `Responsable: ${event.owner.name} (${event.owner.email})\n` +
+      tasksText +
+      (event.runbookUrl ? `Runbook: ${event.runbookUrl}\n` : '') +
+      (event.jiraTicketUrl ? `Jira: ${event.jiraTicketUrl}\n` : '');
 
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:rel-${event.id}@releasehub.app`);

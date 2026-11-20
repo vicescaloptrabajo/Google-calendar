@@ -59,6 +59,8 @@ export const formatEventDescription = (event: ReleaseEvent): string => {
     notes: event.notes
   }, null, 2)}\nRELEASE_HUB_METADATA_END -->`;
 
+  const selectedTasks = (event.checklist || []).filter(c => c.includeInCalendar === true);
+
   const humanReadableSummary = `
 🚀 RELEASE MANAGEMENT & CHANGE CONTROL DOSSIER
 ==============================================
@@ -81,9 +83,9 @@ Tiempo estimado de reversión: ${event.rollbackEstimateMinutes} min
 ------------------------------------
 ${event.involvedMembers.map(m => `• ${m.name} [${m.role}] (${m.email}) - Fase: ${m.phase}`).join('\n') || 'Ninguno asignado'}
 
-✅ CHECKLIST DE VALIDACIÓN
---------------------------
-${event.checklist.map(c => `[${c.completed ? 'X' : ' '}] (${c.phase.toUpperCase()}) ${c.title}`).join('\n') || 'Sin items'}
+📌 TAREAS DEL CAMBIO SELECCIONADAS
+----------------------------------
+${selectedTasks.map(c => `• ${c.title}${c.assignedTo ? ` (${c.assignedTo})` : ''}`).join('\n') || 'Ninguna tarea seleccionada para calendario'}
 
 🔗 ENLACES DE LIBERACIÓN
 -------------------------

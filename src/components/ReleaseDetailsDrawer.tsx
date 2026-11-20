@@ -32,6 +32,7 @@ interface ReleaseDetailsDrawerProps {
   onEdit: (event: ReleaseEvent) => void;
   onDelete: (event: ReleaseEvent) => void;
   onToggleChecklist: (eventId: string, checklistId: string) => void;
+  onToggleTaskCalendar?: (eventId: string, checklistId: string) => void;
   onTriggerNotification: (event: ReleaseEvent, phase: ReleasePhase) => void;
 }
 
@@ -42,9 +43,11 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
   onEdit,
   onDelete,
   onToggleChecklist,
+  onToggleTaskCalendar,
   onTriggerNotification
 }) => {
   const [guestInviteEmail, setGuestInviteEmail] = useState('');
+  const [showAllTasks, setShowAllTasks] = useState(false);
 
   if (!isOpen || !event) return null;
 
@@ -319,56 +322,84 @@ export const ReleaseDetailsDrawer: React.FC<ReleaseDetailsDrawerProps> = ({
             </p>
           </div>
 
-          {/* Validation Checklist */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-emerald-400" />
-                Checklist de Liberación ({completedChecklist}/{totalChecklist})
-              </h4>
-              <span className="text-xs font-bold text-blue-600 dark:text-emerald-400">{checklistPercent}%</span>
-            </div>
+          {/* Tareas del Cambio (CTASK) - Muestra solo las marcadas para Calendario omitiendo fases */}
+          {(() => {
+            const selectedTasks = (event.checklist || []).filter(c => c.includeInCalendar === true);
+            const tasksToShow = showAllTasks ? event.checklist : selectedTasks;
 
-            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-orange-500 h-full rounded-full transition-all"
-                style={{ width: `${checklistPercent}%` }}
-              ></div>
-            </div>
+            return (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-emerald-400" />
+                    {showAllTasks
+                      ? `Todas las Tareas del Cambio (${event.checklist.length})`
+                      : `Tareas del Cambio Seleccionadas (${selectedTasks.length})`}
+                  </h4>
+                  {event.checklist.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTasks(prev => !prev)}
+                      className="text-[11px] font-bold text-blue-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                    >
+                      {showAllTasks
+                        ? `Ver solo seleccionadas (${selectedTasks.length})`
+                        : `Ver todas (${event.checklist.length})`}
+                    </button>
+                  )}
+                </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
-              {event.checklist.map(item => (
-                <div
-                  key={item.id}
-                  onClick={() => onToggleChecklist(event.id, item.id)}
-                  className="p-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer transition-colors"
-                >
-                  <label className="flex items-center gap-2.5 text-xs text-slate-800 dark:text-slate-200 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={item.completed}
-                      onChange={() => {}}
-                      className="rounded border-slate-300 dark:border-slate-700 text-blue-600 dark:text-emerald-500 focus:ring-blue-500 w-4 h-4"
-                    />
-                    <span className={item.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'font-medium'}>
-                      {item.title}
-                    </span>
-                  </label>
+                {tasksToShow.length > 0 ? (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
+                    {tasksToShow.map(item => (
+                      <div
+                        key={item.id}
+                        className="p-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 text-xs text-slate-800 dark:text-slate-200 flex-1 min-w-0">
+                          {showAllTasks && onToggleTaskCalendar ? (
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.includeInCalendar)}
+                              onChange={() => onToggleTaskCalendar(event.id, item.id)}
+                              className="rounded border-slate-300 dark:border-slate-700 text-orange-500 focus:ring-orange-500 w-4 h-4 shrink-0 cursor-pointer"
+                              title="Marcar para mostrar en Calendario y al compartir"
+                            />
+                          ) : (
+                            <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+                          )}
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">
+                            {item.title}
+                          </span>
+                        </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                      {item.phase}
-                    </span>
-                    {item.assignedTo && (
-                      <span className="text-[10px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded hidden sm:inline border border-slate-200 dark:border-slate-700">
-                        {item.assignedTo}
-                      </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {item.assignedTo && (
+                            <span className="text-[10px] text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-semibold border border-slate-200 dark:border-slate-700">
+                              {item.assignedTo}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-2 bg-slate-50/60 dark:bg-slate-900">
+                    <span>No hay tareas (CTASK) marcadas para mostrarse en el calendario.</span>
+                    {event.checklist.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllTasks(true)}
+                        className="font-bold text-blue-600 dark:text-emerald-400 hover:underline shrink-0 cursor-pointer"
+                      >
+                        Seleccionar tareas ({event.checklist.length})
+                      </button>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Involved Team Members Table */}
           <div className="space-y-2">

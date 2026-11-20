@@ -55,7 +55,9 @@ import {
   scanSnowChangeByNumber,
   scanSnowChangesByRange,
   mapScannedChangeToFormData,
-  createDemoScannedChange
+  createDemoScannedChange,
+  formatTaskDateTimeTag,
+  classifySnowTaskPhase
 } from '../services/serviceNowService';
 
 interface ReleaseModalProps {
@@ -242,7 +244,7 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
     setChecklist(mapped.checklist);
     setFieldTraces(mapped.fieldTraces);
     setSnowStatusMsg(
-      `Datos cargados desde ServiceNow (${scanned.number}): ventana, checklist (${mapped.checklist.length} tareas), rollback y participantes listos para editar.`
+      `Datos cargados desde ServiceNow (${scanned.number}): ventana, ${mapped.checklist.length} tareas (CTASK) agrupadas por fase, rollback y participantes. Ve a la pestaña "4. Tareas del Cambio (CTASK)" para marcar las que se mostrarán en el calendario.`
     );
     setSnowError(null);
   };
@@ -336,18 +338,19 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
     );
   };
 
-  // Checklist
+  // Tareas del Cambio (CTASK / Checklist)
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     initialEvent?.checklist || [
-      { id: 'c1', title: 'Backup de base de datos y validación de réplicas', phase: 'pre', completed: false, assignedTo: 'DBA' },
-      { id: 'c2', title: 'Aprobación del comité de cambios (CAB Sign-off)', phase: 'pre', completed: true, assignedTo: 'Release Manager' },
-      { id: 'c3', title: 'Drenado de tráfico y despliegue Canary 20%', phase: 'during', completed: false, assignedTo: 'DevOps / SRE' },
-      { id: 'c4', title: 'Smoke tests de salud y validación de endpoints', phase: 'post', completed: false, assignedTo: 'QA Lead' },
-      { id: 'c5', title: 'Monitoreo de métricas y tasa de error (SLOs)', phase: 'post', completed: false, assignedTo: 'DevOps / SRE' }
+      { id: 'c1', title: 'Backup de base de datos y validación de réplicas', phase: 'pre', completed: false, includeInCalendar: false, assignedTo: 'DBA' },
+      { id: 'c2', title: 'Aprobación del comité de cambios (CAB Sign-off)', phase: 'pre', completed: true, includeInCalendar: false, assignedTo: 'Release Manager' },
+      { id: 'c3', title: 'Drenado de tráfico y despliegue Canary 20%', phase: 'during', completed: false, includeInCalendar: false, assignedTo: 'DevOps / SRE' },
+      { id: 'c4', title: 'Smoke tests de salud y validación de endpoints', phase: 'post', completed: false, includeInCalendar: false, assignedTo: 'QA Lead' },
+      { id: 'c5', title: 'Monitoreo de métricas y tasa de error (SLOs)', phase: 'post', completed: false, includeInCalendar: false, assignedTo: 'DevOps / SRE' }
     ]
   );
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const [newChecklistPhase, setNewChecklistPhase] = useState<'pre' | 'during' | 'post'>('pre');
+  const [newTaskDateTime, setNewTaskDateTime] = useState('');
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
 
   // Add team member (pulls role/email from directory if registered, otherwise blank role)
   const handleAddMember = () => {
@@ -407,14 +410,23 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
     setInvolvedMembers(prev => prev.filter(m => m.id !== id));
   };
 
-  // Add checklist item
+  // Add CTASK / Change Task item (classifies stage automatically in the background)
   const handleAddChecklistItem = () => {
     if (!newChecklistTitle.trim()) return;
+    const rawTitle = newChecklistTitle.trim();
+    const effectiveIso = newTaskDateTime ? localInputToIso(newTaskDateTime) : localInputToIso(startTime);
+    const dateTag = formatTaskDateTimeTag(effectiveIso);
+    const hasBracketDate = /\[\d{2}\/\d{2}\/\d{4}\s*-\s*\d{2}:\d{2}\]/.test(rawTitle);
+    const formattedTitle = dateTag && !hasBracketDate ? `${rawTitle} - ${dateTag}` : rawTitle;
+    const resolvedPhase = classifySnowTaskPhase(rawTitle);
+
     const item: ChecklistItem = {
       id: `chk-${Date.now()}`,
-      title: newChecklistTitle.trim(),
-      phase: newChecklistPhase,
-      completed: false
+      title: formattedTitle,
+      phase: resolvedPhase,
+      completed: false,
+      includeInCalendar: true,
+      scheduledAt: effectiveIso
     };
     setChecklist(prev => [...prev, item]);
     setNewChecklistTitle('');
@@ -424,8 +436,16 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
     setChecklist(prev => prev.filter(c => c.id !== id));
   };
 
-  const handleToggleChecklist = (id: string) => {
-    setChecklist(prev => prev.map(c => c.id === id ? { ...c, completed: !c.completed } : c));
+  const handleToggleTaskInCalendar = (id: string) => {
+    setChecklist(prev =>
+      prev.map(c => (c.id === id ? { ...c, includeInCalendar: !c.includeInCalendar } : c))
+    );
+  };
+
+  const handleSelectAllFilteredTasks = (select: boolean, targetIds: Set<string>) => {
+    setChecklist(prev =>
+      prev.map(c => (targetIds.has(c.id) ? { ...c, includeInCalendar: select } : c))
+    );
   };
 
   // Helper to build the current ReleaseEvent payload from form state (used both for saving and for sending email/invite)
@@ -548,7 +568,12 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
             { id: 'details', label: '1. Datos & Ventana', icon: CalendarIcon },
             { id: 'risk', label: '2. Riesgo & Rollback', icon: ShieldAlert },
             { id: 'team', label: '3. Miembros & Alertas', icon: Users },
-            { id: 'checklist', label: '4. Checklist Validación', icon: CheckCircle2 }
+            {
+              id: 'checklist',
+              label: `4. Tareas del Cambio (CTASK)`,
+              badgeCount: checklist.filter(c => c.includeInCalendar).length,
+              icon: CheckCircle2
+            }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -563,7 +588,12 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
-                {tab.label}
+                <span>{tab.label}</span>
+                {typeof tab.badgeCount === 'number' && tab.badgeCount > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-500 text-white">
+                    {tab.badgeCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1501,92 +1531,173 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: CHECKLIST */}
-          {activeTab === 'checklist' && (
-            <div className="space-y-4">
-              <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center">
-                  Agregar Tarea al Checklist:
-                  {renderSnowBadge('checklist')}
-                </span>
-                <div className="flex gap-2">
+          {/* TAB 4: CHANGE TASKS (CTASK) */}
+          {activeTab === 'checklist' && (() => {
+            const selectedCount = checklist.filter(c => c.includeInCalendar).length;
+            const queryNorm = taskSearchQuery.trim().toLowerCase();
+
+            // Background classification ensures every task is grouped into its phase automatically
+            const classifiedTasks = checklist.map(item => ({
+              ...item,
+              phase: item.phase || classifySnowTaskPhase(item.title, '', item.ctaskType || '')
+            }));
+
+            const filteredTasks = classifiedTasks.filter(item => {
+              if (!queryNorm) return true;
+              const hay = `${item.title} ${item.assignedTo || ''}`.toLowerCase();
+              return hay.includes(queryNorm);
+            });
+
+            const filteredIds = new Set(filteredTasks.map(t => t.id));
+            const stagesToRender: ('pre' | 'during' | 'post')[] = ['pre', 'during', 'post'];
+
+            return (
+              <div className="space-y-4">
+                {/* Selection guidance banner */}
+                <div className="bg-blue-50/80 dark:bg-emerald-950/30 border border-blue-200 dark:border-emerald-800/70 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="text-xs text-blue-950 dark:text-emerald-200 space-y-0.5">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-emerald-400 shrink-0" />
+                      <span>
+                        Selecciona las tareas (CTASK) que aparecerán en el Calendario y al Compartir ({selectedCount} de {checklist.length} marcadas)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Las tareas se clasifican automáticamente en segundo plano según su descripción. En el calendario e invitaciones solo aparecerán las que marques.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Add new task bar */}
+                <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center">
+                    Agregar Tarea del Cambio (CTASK):
+                    {renderSnowBadge('checklist')}
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ej. [CTASK008101] Respaldo de configuración Nginx"
+                      value={newChecklistTitle}
+                      onChange={e => setNewChecklistTitle(e.target.value)}
+                      className="sm:col-span-7 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 shadow-2xs"
+                    />
+                    <input
+                      type="datetime-local"
+                      value={newTaskDateTime || startTime}
+                      onChange={e => setNewTaskDateTime(e.target.value)}
+                      className="sm:col-span-4 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-800 dark:text-white shadow-2xs"
+                      title="Fecha y hora de la tarea para formato [dd/mm/aaaa - HH:mm]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddChecklistItem}
+                      className="sm:col-span-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-lg text-xs cursor-pointer transition-colors flex items-center justify-center"
+                      title="Agregar tarea (se clasifica automáticamente y se marca para mostrar en calendario)"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick search & selection actions */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <input
                     type="text"
-                    placeholder="Descripción de la tarea (ej. Validar certificados SSL)"
-                    value={newChecklistTitle}
-                    onChange={e => setNewChecklistTitle(e.target.value)}
-                    className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 shadow-2xs"
+                    placeholder="Buscar CTASK o responsable..."
+                    value={taskSearchQuery}
+                    onChange={e => setTaskSearchQuery(e.target.value)}
+                    className="w-full sm:w-64 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-slate-800 dark:text-white"
                   />
-                  <select
-                    value={newChecklistPhase}
-                    onChange={e => setNewChecklistPhase(e.target.value as any)}
-                    className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800 dark:text-white shadow-2xs cursor-pointer"
-                  >
-                    <option value="pre">Pre-Despliegue</option>
-                    <option value="during">Durante Despliegue</option>
-                    <option value="post">Post-Despliegue / Validación</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleAddChecklistItem}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-lg text-xs cursor-pointer transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Checklist items by stage */}
-              {(['pre', 'during', 'post'] as const).map(stage => {
-                const stageItems = checklist.filter(c => c.phase === stage);
-                const stageLabel = stage === 'pre' ? 'Fase Pre-Despliegue' : stage === 'during' ? 'Fase de Ejecución' : 'Fase Post-Despliegue & Sanidad';
-
-                return (
-                  <div key={stage} className="space-y-1.5">
-                    <h4 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{stageLabel} ({stageItems.length})</h4>
-                    <div className="space-y-1">
-                      {stageItems.map(item => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs"
-                        >
-                          <label className="flex items-center gap-2 text-xs text-slate-800 dark:text-slate-200 cursor-pointer flex-1 font-medium">
-                            <input
-                              type="checkbox"
-                              checked={item.completed}
-                              onChange={() => handleToggleChecklist(item.id)}
-                              className="rounded border-slate-300 dark:border-slate-700 text-blue-600 dark:text-emerald-500 focus:ring-blue-500 w-4 h-4"
-                            />
-                            <span className={item.completed ? 'line-through text-slate-400 dark:text-slate-500' : ''}>
-                              {item.title}
-                            </span>
-                          </label>
-
-                          <div className="flex items-center gap-2">
-                            {item.assignedTo && (
-                              <span className="text-[10px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded font-medium">
-                                {item.assignedTo}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveChecklistItem(item.id)}
-                              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 cursor-pointer transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {stageItems.length === 0 && (
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 italic pl-2">Sin items asignados para esta etapa.</p>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllFilteredTasks(true, filteredIds)}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 cursor-pointer"
+                    >
+                      Marcar visibles
+                    </button>
+                    {selectedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAllFilteredTasks(false, new Set(checklist.map(c => c.id)))}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer"
+                      >
+                        Limpiar
+                      </button>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </div>
+
+                {/* Grouped Tasks by Stage (auto-classified in background) */}
+                {stagesToRender.map(stage => {
+                  const stageItems = filteredTasks.filter(c => c.phase === stage);
+                  const stageLabel =
+                    stage === 'pre'
+                      ? 'Fase Pre-Despliegue (Respaldos / Snapshots)'
+                      : stage === 'during'
+                      ? 'Fase de Ejecución (Implementación / Interfaces / Otros)'
+                      : 'Fase Post-Despliegue & Sanidad (Validaciones)';
+
+                  return (
+                    <div key={stage} className="space-y-1.5">
+                      <h4 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                        {stageLabel} ({stageItems.length})
+                      </h4>
+                      <div className="space-y-1.5">
+                        {stageItems.map(item => (
+                          <div
+                            key={item.id}
+                            className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border shadow-2xs transition-colors ${
+                              item.includeInCalendar
+                                ? 'bg-blue-50/50 dark:bg-emerald-950/25 border-blue-300 dark:border-emerald-700/70'
+                                : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            <label className="flex items-center gap-2.5 text-xs text-slate-800 dark:text-slate-200 cursor-pointer flex-1 font-medium min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(item.includeInCalendar)}
+                                onChange={() => handleToggleTaskInCalendar(item.id)}
+                                className="rounded border-slate-300 dark:border-slate-600 text-orange-500 focus:ring-orange-500 w-4 h-4 shrink-0 cursor-pointer"
+                                title="Marcar para mostrar esta tarea en el Calendario y al compartir"
+                              />
+                              <span className="font-semibold text-slate-900 dark:text-slate-100 leading-snug">
+                                {item.title}
+                              </span>
+                            </label>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {item.assignedTo && (
+                                <span className="text-[10px] text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded font-semibold border border-slate-200 dark:border-slate-700">
+                                  {item.assignedTo}
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveChecklistItem(item.id)}
+                                className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 cursor-pointer transition-colors"
+                                title="Eliminar tarea"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {stageItems.length === 0 && (
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 italic pl-2">
+                            Sin tareas asignadas en esta fase.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Footer Actions */}
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">

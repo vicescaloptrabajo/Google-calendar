@@ -522,12 +522,25 @@ export default function App() {
     showToast(`Alerta de fase "${phase}" registrada para ${log.recipients.length} miembros asignados.`);
   };
 
-  // Toggle Checklist Item
+  // Toggle Checklist Item completed
   const handleToggleChecklist = (eventId: string, checklistId: string) => {
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const updatedChecklist = e.checklist.map(c => 
         c.id === checklistId ? { ...c, completed: !c.completed } : c
+      );
+      const updated = { ...e, checklist: updatedChecklist };
+      if (drawerEvent?.id === eventId) setDrawerEvent(updated);
+      return updated;
+    }));
+  };
+
+  // Toggle Task visibility in Calendar & Sharing
+  const handleToggleTaskCalendar = (eventId: string, checklistId: string) => {
+    setEvents(prev => prev.map(e => {
+      if (e.id !== eventId) return e;
+      const updatedChecklist = e.checklist.map(c =>
+        c.id === checklistId ? { ...c, includeInCalendar: !c.includeInCalendar } : c
       );
       const updated = { ...e, checklist: updatedChecklist };
       if (drawerEvent?.id === eventId) setDrawerEvent(updated);
@@ -684,6 +697,7 @@ export default function App() {
         }}
         onDelete={ev => setDeleteEvent(ev)}
         onToggleChecklist={handleToggleChecklist}
+        onToggleTaskCalendar={handleToggleTaskCalendar}
         onTriggerNotification={handleTriggerPhaseNotification}
       />
 

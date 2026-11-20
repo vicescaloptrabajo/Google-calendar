@@ -23,10 +23,12 @@ export const buildPhaseNotificationPayload = (
 
   const subject = `[IMPLEMENTACIÓN / CAMBIO] ${release.changeTicketId} (${release.releaseTag} | ${release.environment.toUpperCase()}) - ${release.title}`;
 
+  const selectedTasks = (release.checklist || []).filter(c => c.includeInCalendar === true);
+
   const checklistSection =
-    release.checklist && release.checklist.length > 0
-      ? `\nCHECKLIST DE VALIDACIÓN:\n${release.checklist
-          .map(c => `[${c.completed ? 'X' : ' '}] (${c.phase.toUpperCase()}) ${c.title}`)
+    selectedTasks.length > 0
+      ? `\nTAREAS DEL CAMBIO SELECCIONADAS:\n${selectedTasks
+          .map(c => `• ${c.title}${c.assignedTo ? ` (${c.assignedTo})` : ''}`)
           .join('\n')}\n`
       : '';
 
@@ -91,7 +93,18 @@ ${release.htmlLink ? `📅 <${release.htmlLink}|Abrir en Google Calendar>` : ''}
         <p style="margin: 4px 0 0 0;">${release.rollbackPlan}</p>
       </div>
 
-      <p>Por favor revise el checklist y manténgase en contacto con el Release Manager (<strong>${release.owner.name}</strong>).</p>
+      ${
+        selectedTasks.length > 0
+          ? `<div style="margin: 16px 0;">
+              <strong>Tareas del Cambio Seleccionadas:</strong>
+              <ul style="margin: 6px 0 0 18px; padding: 0;">
+                ${selectedTasks.map(c => `<li>${c.title}</li>`).join('')}
+              </ul>
+            </div>`
+          : ''
+      }
+
+      <p>Por favor revise los detalles y manténgase en contacto con el Release Manager (<strong>${release.owner.name}</strong>).</p>
       ${release.htmlLink ? `<p><a href="${release.htmlLink}" style="background: #2563eb; color: #fff; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block;">Ver en Google Calendar</a></p>` : ''}
     </div>
   `;

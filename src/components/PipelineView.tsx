@@ -147,7 +147,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                       {totalChecklist > 0 && (
                         <div>
                           <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                            <span>Checklist ({completedChecklist}/{totalChecklist})</span>
+                            <span>Tareas ({completedChecklist}/{totalChecklist})</span>
                             <span className="font-bold text-slate-700 dark:text-slate-300">{checklistPercent}%</span>
                           </div>
                           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">

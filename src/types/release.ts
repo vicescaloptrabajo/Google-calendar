@@ -88,6 +88,10 @@ export interface ChecklistItem {
   title: string;
   phase: 'pre' | 'during' | 'post';
   completed: boolean;
+  includeInCalendar?: boolean; // Si está marcada para mostrarse en el calendario y al compartir
+  scheduledAt?: string; // ISO string de fecha/hora programada de la tarea
+  ctaskType?: string; // Tipo de CTASK en ServiceNow (Respaldo, Implementación, Validación, etc.)
+  snowState?: string; // Estado en ServiceNow
   assignedTo?: string;
   completedAt?: string;
 }
