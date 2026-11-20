@@ -32,6 +32,8 @@ import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { ShareModal } from './components/ShareModal';
 import { ImportModal } from './components/ImportModal';
 import { GoogleDiagnosticsModal } from './components/GoogleDiagnosticsModal';
+import { DayEventsModal } from './components/DayEventsModal';
+import { toLocalDateKey } from './utils/dateUtils';
 import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 
 export default function App() {
@@ -171,6 +173,7 @@ export default function App() {
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [creationPresetDate, setCreationPresetDate] = useState<Date | undefined>(undefined);
+  const [dayModalDate, setDayModalDate] = useState<Date | null>(null);
 
   // Theme State: 'light' (clean white/blue/orange) or 'dark' (cyber dark slate)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -604,6 +607,7 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectEvent={ev => setDrawerEvent(ev)}
+            onOpenDayModal={date => setDayModalDate(date)}
             onCreateAtDate={date => {
               setEditingEvent(null);
               setCreationPresetDate(date);
@@ -620,6 +624,7 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectEvent={ev => setDrawerEvent(ev)}
+            onOpenDayModal={date => setDayModalDate(date)}
             onCreateAtDate={date => {
               setEditingEvent(null);
               setCreationPresetDate(date);
@@ -722,6 +727,27 @@ export default function App() {
         onOpenGoogleDiagnostics={() => {
           setIsNotificationModalOpen(false);
           setIsGoogleDiagnosticsOpen(true);
+        }}
+      />
+
+      {/* Day Events Popup Modal (opened when clicking a calendar date) */}
+      <DayEventsModal
+        isOpen={!!dayModalDate}
+        date={dayModalDate}
+        events={
+          dayModalDate
+            ? events.filter(e => {
+                if (selectedEnv !== 'all' && e.environment !== selectedEnv) return false;
+                return toLocalDateKey(e.startTime) === toLocalDateKey(dayModalDate);
+              })
+            : []
+        }
+        onClose={() => setDayModalDate(null)}
+        onSelectEvent={ev => setDrawerEvent(ev)}
+        onCreateAtDate={date => {
+          setEditingEvent(null);
+          setCreationPresetDate(date);
+          setIsCreateModalOpen(true);
         }}
       />
 

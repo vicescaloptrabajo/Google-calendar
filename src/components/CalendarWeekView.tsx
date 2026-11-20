@@ -17,6 +17,7 @@ interface CalendarWeekViewProps {
   onSelectDate: (date: Date) => void;
   onSelectEvent: (event: ReleaseEvent) => void;
   onCreateAtDate: (date: Date) => void;
+  onOpenDayModal?: (date: Date) => void;
   selectedEnv: Environment | 'all';
   onSelectEnv?: (env: Environment | 'all') => void;
 }
@@ -27,6 +28,7 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
   onSelectDate,
   onSelectEvent,
   onCreateAtDate,
+  onOpenDayModal,
   selectedEnv,
   onSelectEnv
 }) => {
@@ -142,7 +144,12 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
               return (
                 <div
                   key={idx}
-                  className={`p-3 text-center border-l border-slate-200 dark:border-slate-800 ${
+                  onClick={() => {
+                    onSelectDate(day);
+                    if (onOpenDayModal) onOpenDayModal(day);
+                  }}
+                  title="Ver cambios del día"
+                  className={`p-3 text-center border-l border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-blue-50/40 dark:hover:bg-slate-700/40 transition-colors ${
                     isToday ? 'bg-orange-50/50 dark:bg-orange-950/30' : ''
                   }`}
                 >

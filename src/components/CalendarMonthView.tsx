@@ -25,6 +25,7 @@ interface CalendarMonthViewProps {
   onSelectDate: (date: Date) => void;
   onSelectEvent: (event: ReleaseEvent) => void;
   onCreateAtDate: (date: Date) => void;
+  onOpenDayModal?: (date: Date) => void;
   selectedEnv: Environment | 'all';
   onSelectEnv?: (env: Environment | 'all') => void;
 }
@@ -35,6 +36,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
   onSelectDate,
   onSelectEvent,
   onCreateAtDate,
+  onOpenDayModal,
   selectedEnv,
   onSelectEnv
 }) => {
@@ -398,6 +400,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
                 key={index}
                 onClick={() => {
                   onSelectDate(date);
+                  if (onOpenDayModal) onOpenDayModal(date);
                 }}
                 className={`min-h-[120px] sm:min-h-[145px] p-1.5 sm:p-2 bg-white dark:bg-slate-900 flex flex-col justify-between transition-colors relative group hover:bg-blue-50/30 dark:hover:bg-slate-800/60 cursor-pointer ${
                   !isCurrentMonth ? 'bg-slate-50/70 dark:bg-slate-950/60 text-slate-400 dark:text-slate-600 opacity-60' : ''
@@ -538,7 +541,12 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
                   {/* Show +N more if over limit */}
                   {dayEvents.length > 3 && (
                     <button
-                      onClick={() => onSelectDate(date)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectDate(date);
+                        if (onOpenDayModal) onOpenDayModal(date);
+                      }}
                       className="w-full text-center text-[10px] text-blue-600 dark:text-blue-400 font-bold py-0.5 bg-blue-50/80 dark:bg-blue-950/60 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors cursor-pointer"
                     >
                       +{dayEvents.length - 3} más

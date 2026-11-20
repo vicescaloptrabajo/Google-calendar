@@ -56,7 +56,7 @@ import {
   scanSnowChangesByRange,
   mapScannedChangeToFormData,
   createDemoScannedChange,
-  formatTaskDateTimeTag,
+  buildFormattedTaskTitle,
   classifySnowTaskPhase
 } from '../services/serviceNowService';
 
@@ -415,9 +415,7 @@ export const ReleaseModal: React.FC<ReleaseModalProps> = ({
     if (!newChecklistTitle.trim()) return;
     const rawTitle = newChecklistTitle.trim();
     const effectiveIso = newTaskDateTime ? localInputToIso(newTaskDateTime) : localInputToIso(startTime);
-    const dateTag = formatTaskDateTimeTag(effectiveIso);
-    const hasBracketDate = /\[\d{2}\/\d{2}\/\d{4}\s*-\s*\d{2}:\d{2}\]/.test(rawTitle);
-    const formattedTitle = dateTag && !hasBracketDate ? `${rawTitle} - ${dateTag}` : rawTitle;
+    const formattedTitle = buildFormattedTaskTitle(rawTitle, effectiveIso);
     const resolvedPhase = classifySnowTaskPhase(rawTitle);
 
     const item: ChecklistItem = {

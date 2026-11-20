@@ -173,6 +173,35 @@ export const formatTaskDateTimeTag = (dateInput?: string | Date): string => {
 };
 
 /**
+ * Formats a CTASK / task title placing [dd/mm/yyyy - HH:mm] right after [CTASK...] (or at start if no code).
+ * Example: [CTASK008101] [22/11/2026 - 21:00] Respaldo de configuración Nginx Ingress y secretos TLS
+ */
+export const buildFormattedTaskTitle = (
+  rawTitle: string,
+  dateInput?: string | Date,
+  taskNumber?: string
+): string => {
+  const cleanTitle = (rawTitle || '').trim();
+  const dateTag = formatTaskDateTimeTag(dateInput);
+
+  if (taskNumber) {
+    const cleanNum = taskNumber.trim();
+    return `[${cleanNum}] ${dateTag ? `${dateTag} ` : ''}${cleanTitle}`;
+  }
+
+  if (!dateTag || /\[\d{2}\/\d{2}\/\d{4}\s*-\s*\d{2}:\d{2}\]/.test(cleanTitle)) {
+    return cleanTitle;
+  }
+
+  const prefixMatch = cleanTitle.match(/^(\[[^\]]+\])\s*(.*)$/);
+  if (prefixMatch) {
+    return `${prefixMatch[1]} ${dateTag} ${prefixMatch[2]}`.trim();
+  }
+
+  return `${dateTag} ${cleanTitle}`;
+};
+
+/**
  * Classifies a CTASK into Pre-Despliegue ('pre'), Ejecución ('during'), or Post-Despliegue & Sanidad ('post')
  * based on description, short_description, and CTASK type. Unmatched tasks default to 'during' (Ejecución).
  */
@@ -461,9 +490,7 @@ export const mapScannedChangeToFormData = (change: ScannedSnowChange): MappedSno
       ? change.tasks.map((t, idx) => {
           const parsedTaskDate = t.startDate ? parseFlexibleDate(t.startDate, parsedStart.getHours()) : parsedStart;
           const effectiveTaskDate = parsedTaskDate || parsedStart;
-          const dateTag = formatTaskDateTimeTag(effectiveTaskDate);
-          const baseTitle = `${t.number ? `[${t.number}] ` : ''}${t.shortDescription}`;
-          const formattedTitle = dateTag && !baseTitle.includes(dateTag) ? `${baseTitle} - ${dateTag}` : baseTitle;
+          const formattedTitle = buildFormattedTaskTitle(t.shortDescription, effectiveTaskDate, t.number);
 
           return {
             id: `chk-snow-${idx}-${Date.now()}`,
@@ -480,7 +507,7 @@ export const mapScannedChangeToFormData = (change: ScannedSnowChange): MappedSno
       : [
           {
             id: `chk-snow-def-1`,
-            title: `Validar pre-requisitos y respaldo de ${change.number} - ${formatTaskDateTimeTag(parsedStart)}`,
+            title: buildFormattedTaskTitle(`Validar pre-requisitos y respaldo de ${change.number}`, parsedStart),
             phase: 'pre',
             completed: false,
             includeInCalendar: false,
@@ -489,7 +516,7 @@ export const mapScannedChangeToFormData = (change: ScannedSnowChange): MappedSno
           },
           {
             id: `chk-snow-def-2`,
-            title: `Ejecución de implementación en ${environment.toUpperCase()} - ${formatTaskDateTimeTag(parsedStart)}`,
+            title: buildFormattedTaskTitle(`Ejecución de implementación en ${environment.toUpperCase()}`, parsedStart),
             phase: 'during',
             completed: false,
             includeInCalendar: false,
@@ -498,7 +525,7 @@ export const mapScannedChangeToFormData = (change: ScannedSnowChange): MappedSno
           },
           {
             id: `chk-snow-def-3`,
-            title: `Validaciones y pruebas de sanidad post-cambio - ${formatTaskDateTimeTag(parsedEnd)}`,
+            title: buildFormattedTaskTitle(`Validaciones y pruebas de sanidad post-cambio`, parsedEnd),
             phase: 'post',
             completed: false,
             includeInCalendar: false,
